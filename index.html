@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Rekomposition</title>
+<meta name="description" content="Körperrekomposition messen: Gewicht, Taille, Körperfett nach Navy-Methode.">
+<link rel="manifest" href="./manifest.webmanifest">
+<meta name="theme-color" content="#faf7f2" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#17161a" media="(prefers-color-scheme: dark)">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Rekomposition">
+<link rel="apple-touch-icon" href="./icons/icon-192.png">
+<link rel="icon" href="./icons/icon-192.png">
+<link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <h1>Rekomposition</h1>
+    <p class="topbar-sub" id="lastMeasured">—</p>
+  </div>
+</header>
+
+<main id="app">
+
+  <!-- ── Letzte Ablesung ───────────────────────────────── -->
+  <section class="card reading" aria-labelledby="h-reading">
+    <h2 id="h-reading" class="card-title">Letzte Ablesung</h2>
+
+    <div class="lead">
+      <div class="lead-value">
+        <span id="leadBf" class="lead-number">—</span><span class="lead-unit">%</span>
+      </div>
+      <div class="lead-meta">
+        <span class="lead-label">Körperfett</span>
+        <span id="leadBfDelta" class="delta"></span>
+      </div>
+    </div>
+
+    <div class="readout" id="readout"></div>
+    <p class="note" id="readingNote"></p>
+  </section>
+
+  <!-- ── Ziele ─────────────────────────────────────────── -->
+  <section class="card" aria-labelledby="h-goals">
+    <h2 id="h-goals" class="card-title">Weg zum Ziel</h2>
+    <div id="goals" class="goals"></div>
+  </section>
+
+  <!-- ── Verlauf ───────────────────────────────────────── -->
+  <section class="card" aria-labelledby="h-chart">
+    <h2 id="h-chart" class="card-title">Verlauf</h2>
+    <div class="chips" id="metricChips" role="tablist" aria-label="Messgröße wählen"></div>
+    <div class="chart-wrap">
+      <svg id="chart" role="img" aria-label="Verlaufsdiagramm"></svg>
+      <p class="chart-empty" id="chartEmpty" hidden>Noch zu wenig Daten — trag eine zweite Messung ein, dann zeichne ich die Linie.</p>
+    </div>
+    <p class="chart-hint" id="chartHint"></p>
+  </section>
+
+  <!-- ── Neue Messung ──────────────────────────────────── -->
+  <section class="card" aria-labelledby="formTitle">
+    <h2 id="formTitle" class="card-title">Neue Messung</h2>
+    <form id="entryForm" novalidate>
+      <div class="field-grid">
+        <label class="field field-wide">
+          <span class="field-label">Datum</span>
+          <input type="date" id="f-date" required>
+        </label>
+
+        <label class="field">
+          <span class="field-label">Gewicht <em>kg</em></span>
+          <input type="text" id="f-weight" inputmode="decimal" autocomplete="off" placeholder="z. B. 82,5">
+        </label>
+
+        <label class="field">
+          <span class="field-label">Taille <em>cm</em></span>
+          <input type="text" id="f-waist" inputmode="decimal" autocomplete="off" placeholder="z. B. 92,0">
+        </label>
+
+        <label class="field">
+          <span class="field-label">Hals <em>cm</em></span>
+          <input type="text" id="f-neck" inputmode="decimal" autocomplete="off" placeholder="z. B. 40,5">
+        </label>
+
+        <label class="field">
+          <span class="field-label">Oberarm <em>cm</em></span>
+          <input type="text" id="f-arm" inputmode="decimal" autocomplete="off" placeholder="optional">
+        </label>
+
+        <label class="field">
+          <span class="field-label">Brust <em>cm</em></span>
+          <input type="text" id="f-chest" inputmode="decimal" autocomplete="off" placeholder="optional">
+        </label>
+
+        <label class="field field-wide">
+          <span class="field-label">Notiz</span>
+          <input type="text" id="f-note" autocomplete="off" placeholder="optional">
+        </label>
+      </div>
+
+      <div class="preview" id="preview" hidden></div>
+      <p class="error" id="formError" hidden></p>
+
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary" id="submitBtn">Eintragen</button>
+        <button type="button" class="btn btn-ghost" id="cancelEdit" hidden>Abbrechen</button>
+      </div>
+      <p class="note">Morgens, nüchtern, nach dem WC. Taille auf Nabelhöhe, entspannt ausgeatmet.
+      Nur das Gewicht ist Pflicht — Taille und Hals brauchst du nur alle 2–4 Wochen.</p>
+    </form>
+  </section>
+
+  <!-- ── Alle Messungen ────────────────────────────────── -->
+  <section class="card" aria-labelledby="h-ledger">
+    <h2 id="h-ledger" class="card-title">Alle Messungen <span class="count" id="entryCount"></span></h2>
+    <div id="ledger" class="ledger"></div>
+  </section>
+
+  <!-- ── Einstellungen ─────────────────────────────────── -->
+  <section class="card">
+    <details id="settings">
+      <summary class="card-title summary">Einstellungen &amp; Daten</summary>
+
+      <div class="settings-body">
+        <h3 class="sub-title">Körpermaße</h3>
+        <div class="field-grid">
+          <label class="field">
+            <span class="field-label">Größe <em>cm</em></span>
+            <input type="text" id="s-height" inputmode="decimal" autocomplete="off">
+          </label>
+        </div>
+
+        <h3 class="sub-title">Zielwerte</h3>
+        <div class="field-grid">
+          <label class="field">
+            <span class="field-label">Taille Etappe <em>cm</em></span>
+            <input type="text" id="s-waistFirst" inputmode="decimal" autocomplete="off">
+          </label>
+          <label class="field">
+            <span class="field-label">Taille Ziel <em>cm</em></span>
+            <input type="text" id="s-waistLong" inputmode="decimal" autocomplete="off">
+          </label>
+          <label class="field">
+            <span class="field-label">Körperfett von <em>%</em></span>
+            <input type="text" id="s-bfLow" inputmode="decimal" autocomplete="off">
+          </label>
+          <label class="field">
+            <span class="field-label">Körperfett bis <em>%</em></span>
+            <input type="text" id="s-bfHigh" inputmode="decimal" autocomplete="off">
+          </label>
+        </div>
+        <p class="note" id="targetWeightNote"></p>
+
+        <h3 class="sub-title">Daten sichern</h3>
+        <p class="note">Deine Messungen liegen ausschließlich auf diesem Gerät. Es gibt keine Cloud —
+        exportiere regelmäßig eine CSV, sonst sind die Daten beim Handywechsel oder beim Leeren der
+        Browserdaten weg.</p>
+        <div class="form-actions">
+          <button type="button" class="btn" id="exportBtn">CSV exportieren</button>
+          <button type="button" class="btn" id="importBtn">CSV importieren</button>
+          <input type="file" id="importFile" accept=".csv,text/csv" hidden>
+        </div>
+        <p class="status" id="dataStatus" hidden></p>
+
+        <h3 class="sub-title">Zurücksetzen</h3>
+        <div class="form-actions">
+          <button type="button" class="btn btn-danger" id="resetBtn">Alle Daten löschen</button>
+        </div>
+      </div>
+    </details>
+  </section>
+
+  <footer class="foot">
+    <p>Körperfett nach der Navy-Methode aus Hals, Taille und Größe — Unschärfe rund ±3 Prozentpunkte.
+    Nur der Trend zählt, nicht der einzelne Absolutwert.</p>
+  </footer>
+
+</main>
+
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+<script src="./app.js"></script>
+</body>
+</html>
