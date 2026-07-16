@@ -1,6 +1,9 @@
 /* ── Rekomposition ──────────────────────────────────────
    Körperzusammensetzung verfolgen. Alles lokal, keine Cloud,
    keine Abhängigkeiten.
+
+   Messwerte liegen in localStorage (klein, synchron lesbar),
+   Fotos in IndexedDB (Blobs, viel zu groß für localStorage).
    ────────────────────────────────────────────────────── */
 
 'use strict';
@@ -9,8 +12,8 @@ const STORE_KEY = 'rekomposition.v1';
 const BACKUP_KEY = 'rekomposition.v1.beschaedigt';
 
 // Bewusst ohne persönliche Werte: Diese Dateien liegen öffentlich beim Hoster.
-// Körpergröße und Zielwerte stellst du in der App unter "Einstellungen & Daten"
-// ein, die Messungen bleiben ohnehin nur lokal auf dem Gerät.
+// Körpergröße und Zielwerte stellst du in der App unter "Einstellungen" ein,
+// die Messungen bleiben ohnehin nur lokal auf dem Gerät.
 // Die Vorgaben unten sind allgemeine Richtwerte für Männer: 94 cm gilt als
 // Schwelle zum erhöhten Risiko, die Taille sollte unter der halben Körpergröße
 // liegen, 15–18 % Körperfett ist die Zone "fit/schlank".
@@ -23,6 +26,9 @@ const DEFAULTS = {
   entries: []
 };
 
+/** Abstand zwischen zwei Taillenmessungen, ab dem erinnert wird. */
+const MESS_INTERVALL_TAGE = 28;
+
 /* ── Messgrößen ────────────────────────────────────────── */
 
 const METRICS = {
@@ -30,9 +36,7 @@ const METRICS = {
   weight: { label: 'Gewicht',    unit: 'kg', digits: 2, dir: 'down', pick: e => e.weight, trend: true },
   waist:  { label: 'Taille',     unit: 'cm', digits: 1, dir: 'down', pick: e => e.waist },
   fat:    { label: 'Fettmasse',  unit: 'kg', digits: 1, dir: 'down', pick: e => e.d.fatMass },
-  lean:   { label: 'Magermasse', unit: 'kg', digits: 1, dir: 'up',   pick: e => e.d.leanMass },
-  arm:    { label: 'Oberarm',    unit: 'cm', digits: 1, dir: 'up',   pick: e => e.arm,   optional: true },
-  chest:  { label: 'Brust',      unit: 'cm', digits: 1, dir: 'up',   pick: e => e.chest, optional: true }
+  lean:   { label: 'Magermasse', unit: 'kg', digits: 1, dir: 'up',   pick: e => e.d.leanMass }
 };
 
 const HINTS = {
@@ -40,9 +44,7 @@ const HINTS = {
   weight: 'Schwankt täglich um 1–2 kg durch Wasser und Darminhalt. Lies die Linie, nicht den Punkt — die gestrichelte Linie ist der geglättete Trend.',
   waist: 'Dein bester reiner Fett-Indikator: Muskeln machen den Bauch nicht breiter, Fett schon.',
   fat: 'Das, was tatsächlich weg soll.',
-  lean: 'Muskeln, Knochen, Organe, Wasser. Diese Linie soll flach bleiben oder steigen — dann hältst du deine Muskulatur.',
-  arm: 'Soll steigen, während die Taille fällt. Genau das ist der Beweis für gelungene Rekomposition.',
-  chest: 'Soll steigen, während die Taille fällt.'
+  lean: 'Muskeln, Knochen, Organe, Wasser. Diese Linie soll flach bleiben oder steigen — dann hältst du deine Muskulatur.'
 };
 
 /* ── Zustand ───────────────────────────────────────────── */
@@ -52,10 +54,18 @@ const HINTS = {
 // scheitert mit "Cannot access 'isDate' before initialization".
 let state;
 let metric = 'bf';
+let page = 'messen';
 let editingId = null;
 let installEvent = null;
 
-/* ── Speicher ──────────────────────────────────────────── */
+// Fotos: Blobs liegen in IndexedDB, hier nur die IDs für synchrones Rendern.
+const photoIds = new Set();
+let pendingPhoto = null;    // neu gewähltes Foto, noch nicht gespeichert
+let photoCleared = false;   // vorhandenes Foto beim Bearbeiten entfernt
+let formPhotoUrl = null;
+const photoUrlCache = new Map();
+
+/* ── Speicher: Messwerte ───────────────────────────────── */
 
 function load() {
   const raw = localStorage.getItem(STORE_KEY);
@@ -102,14 +112,83 @@ function cleanEntry(e) {
     weight: num(e.weight),
     waist: num(e.waist),
     neck: num(e.neck),
-    arm: num(e.arm),
-    chest: num(e.chest),
     note: typeof e.note === 'string' ? e.note : ''
   };
 }
 
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 const isDate = s => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s);
+
+/* ── Speicher: Fotos (IndexedDB) ───────────────────────── */
+
+const DB_NAME = 'rekomposition-fotos';
+const DB_STORE = 'fotos';
+let dbPromise = null;
+
+function db() {
+  if (!dbPromise) {
+    dbPromise = new Promise((res, rej) => {
+      const req = indexedDB.open(DB_NAME, 1);
+      req.onupgradeneeded = () => {
+        if (!req.result.objectStoreNames.contains(DB_STORE)) req.result.createObjectStore(DB_STORE);
+      };
+      req.onsuccess = () => res(req.result);
+      req.onerror = () => rej(req.error);
+    });
+  }
+  return dbPromise;
+}
+
+function tx(mode, fn) {
+  return db().then(d => new Promise((res, rej) => {
+    const t = d.transaction(DB_STORE, mode);
+    const req = fn(t.objectStore(DB_STORE));
+    t.oncomplete = () => res(req ? req.result : undefined);
+    t.onerror = () => rej(t.error);
+    t.onabort = () => rej(t.error);
+  }));
+}
+
+const photoPut = (id, blob) => tx('readwrite', s => s.put(blob, id));
+const photoGet = id => tx('readonly', s => s.get(id));
+const photoDel = id => tx('readwrite', s => s.delete(id));
+const photoAllKeys = () => tx('readonly', s => s.getAllKeys());
+const photoClear = () => tx('readwrite', s => s.clear());
+
+async function photoUrl(id) {
+  if (photoUrlCache.has(id)) return photoUrlCache.get(id);
+  const blob = await photoGet(id);
+  if (!blob) return null;
+  const url = URL.createObjectURL(blob);
+  photoUrlCache.set(id, url);
+  return url;
+}
+
+function forgetPhotoUrl(id) {
+  const url = photoUrlCache.get(id);
+  if (url) { URL.revokeObjectURL(url); photoUrlCache.delete(id); }
+}
+
+/**
+ * Verkleinert und komprimiert ein Foto vor dem Speichern. Der Umweg über
+ * Canvas kodiert das Bild neu und wirft dabei sämtliche EXIF-Daten weg —
+ * inklusive GPS-Position. Die Drehung wird vorher aus dem EXIF übernommen,
+ * sonst lägen Hochformat-Aufnahmen quer.
+ */
+async function shrinkImage(file, maxPx = 1400, quality = 0.82) {
+  const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
+  const scale = Math.min(1, maxPx / Math.max(bitmap.width, bitmap.height));
+  const w = Math.round(bitmap.width * scale);
+  const h = Math.round(bitmap.height * scale);
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  canvas.getContext('2d').drawImage(bitmap, 0, 0, w, h);
+  bitmap.close();
+  return new Promise((res, rej) => {
+    canvas.toBlob(b => b ? res(b) : rej(new Error('Bild konnte nicht umgewandelt werden')), 'image/jpeg', quality);
+  });
+}
 
 /* ── Zahlen ────────────────────────────────────────────── */
 
@@ -131,6 +210,13 @@ function fmt(n, digits = 1) {
   return n.toLocaleString('de-DE', { minimumFractionDigits: digits, maximumFractionDigits: digits });
 }
 
+function fmtBytes(b) {
+  if (!Number.isFinite(b)) return '—';
+  if (b < 1048576) return `${fmt(b / 1024, 0)} KB`;
+  if (b < 1073741824) return `${fmt(b / 1048576, 1)} MB`;
+  return `${fmt(b / 1073741824, 1)} GB`;
+}
+
 function fmtDate(iso) {
   const [y, m, d] = iso.split('-');
   return `${d}.${m}.${y}`;
@@ -145,6 +231,8 @@ const todayISO = () => {
   const t = new Date();
   return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`;
 };
+
+const daysSince = iso => Math.floor((Date.parse(todayISO()) - Date.parse(iso)) / 86400000);
 
 /* ── Navy-Formel (Männer) ──────────────────────────────── */
 
@@ -218,18 +306,52 @@ function targetsFor(key, rows) {
   }
 }
 
-/* ── Rendern ───────────────────────────────────────────── */
+/* ── Seiten ────────────────────────────────────────────── */
 
 const $ = id => document.getElementById(id);
 
+function showPage(name) {
+  page = name;
+  document.querySelectorAll('.page').forEach(p => { p.hidden = p.dataset.page !== name; });
+  document.querySelectorAll('.tab').forEach(t => t.setAttribute('aria-selected', String(t.dataset.page === name)));
+  // Das Diagramm misst die Breite seines Rahmens. Auf einer versteckten Seite
+  // ist die 0, deshalb erst jetzt zeichnen.
+  if (name === 'fortschritt') renderChart(decorate(state.entries, state.settings.heightCm));
+  window.scrollTo(0, 0);
+}
+
+/* ── Rendern ───────────────────────────────────────────── */
+
 function render() {
   const rows = decorate(state.entries, state.settings.heightCm);
+  renderReminder(rows);
   renderReading(rows);
   renderGoals(rows);
-  renderChips(rows);
+  renderChips();
   renderChart(rows);
   renderLedger(rows);
   renderSettings(rows);
+  renderStorage();
+}
+
+function renderReminder(rows) {
+  const el = $('reminder');
+  if (!rows.length) { el.hidden = true; return; }
+
+  const lastWaist = [...rows].reverse().find(r => r.waist != null);
+  if (!lastWaist) {
+    el.hidden = false;
+    el.innerHTML = 'Trag einmal <b>Taille und Hals</b> ein — erst dann kann die App dein Körperfett berechnen.';
+    return;
+  }
+
+  const tage = daysSince(lastWaist.date);
+  if (tage >= MESS_INTERVALL_TAGE) {
+    el.hidden = false;
+    el.innerHTML = `Deine letzte Taillenmessung ist <b>${tage} Tage</b> her — Zeit für Taille und ein neues Foto.`;
+  } else {
+    el.hidden = true;
+  }
 }
 
 function renderReading(rows) {
@@ -241,7 +363,7 @@ function renderReading(rows) {
     $('leadBfDelta').className = 'delta';
     $('leadBfDelta').textContent = '';
     $('readout').innerHTML = '';
-    $('readingNote').textContent = 'Stell zuerst deine Körpergröße unter „Einstellungen & Daten“ ein — ohne sie lässt sich das Körperfett nicht berechnen. Danach trägst du unten deine erste Messung ein.';
+    $('readingNote').textContent = 'Stell zuerst deine Körpergröße unter „Einstellungen“ ein — ohne sie lässt sich das Körperfett nicht berechnen. Danach trägst du oben deine erste Messung ein.';
     return;
   }
 
@@ -250,12 +372,10 @@ function renderReading(rows) {
 
   $('readout').innerHTML = ['weight', 'waist', 'lean'].map(key => {
     const m = METRICS[key];
-    const v = m.pick(last);
-    const dl = delta(rows, key);
     return `<div class="cell">
       <span class="cell-label">${m.label}</span>
-      <span class="cell-value">${fmt(v, m.digits)}<span class="u">${m.unit}</span></span>
-      ${deltaHtml(dl, m)}
+      <span class="cell-value">${fmt(m.pick(last), m.digits)}<span class="u">${m.unit}</span></span>
+      ${deltaHtml(delta(rows, key), m)}
     </div>`;
   }).join('');
 
@@ -279,8 +399,7 @@ function readingNote(rows, last) {
 
 /** Veränderung zur letzten Messung, die diese Größe überhaupt hat. */
 function delta(rows, key) {
-  const m = METRICS[key];
-  const vals = rows.map(m.pick);
+  const vals = rows.map(METRICS[key].pick);
   let last = null, prev = null;
   for (let i = vals.length - 1; i >= 0; i--) {
     if (vals[i] == null) continue;
@@ -294,8 +413,7 @@ function deltaClass(d, m) {
   if (d == null) return 'flat';
   const eps = m.digits >= 2 ? 0.005 : 0.05;
   if (Math.abs(d) < eps) return 'flat';
-  const falling = d < 0;
-  return (m.dir === 'down') === falling ? 'good' : 'bad';
+  return (m.dir === 'down') === (d < 0) ? 'good' : 'bad';
 }
 
 function deltaText(d, m) {
@@ -318,31 +436,27 @@ function deltaHtml(d, m) {
 
 function renderGoals(rows) {
   const t = state.settings.targets;
-  const first = rows[0], last = rows[rows.length - 1];
-  if (!first || !last) { $('goals').innerHTML = '<p class="empty">Noch keine Messung.</p>'; return; }
+  if (!rows.length) { $('goals').innerHTML = '<p class="empty">Noch keine Messung.</p>'; return; }
 
   const bars = [];
   const waistNow = lastOf(rows, 'waist'), waistStart = firstOf(rows, 'waist');
-  if (waistNow != null && waistStart != null) {
-    bars.push(bar('Taille', waistStart, waistNow, t.waistLong, 'cm', 1));
-  }
+  if (waistNow != null && waistStart != null) bars.push(bar('Taille', waistStart, waistNow, t.waistLong, 'cm', 1));
+
   const bfNow = lastOf(rows, 'bf'), bfStart = firstOf(rows, 'bf');
-  if (bfNow != null && bfStart != null) {
-    bars.push(bar('Körperfett', bfStart, bfNow, t.bfHigh, '%', 1));
-  }
-  $('goals').innerHTML = bars.length ? bars.join('') : '<p class="empty">Trag eine Taille ein, dann erscheinen hier die Zielbalken.</p>';
+  if (bfNow != null && bfStart != null) bars.push(bar('Körperfett', bfStart, bfNow, t.bfHigh, '%', 1));
+
+  $('goals').innerHTML = bars.length ? bars.join('')
+    : '<p class="empty">Trag eine Taille ein, dann erscheinen hier die Zielbalken.</p>';
 }
 
 function bar(name, start, now, target, unit, digits) {
   const span = start - target;
-  const done = start - now;
-  const pct = span <= 0 ? (now <= target ? 100 : 0) : Math.max(0, Math.min(100, done / span * 100));
+  const pct = span <= 0 ? (now <= target ? 100 : 0) : Math.max(0, Math.min(100, (start - now) / span * 100));
   const left = now - target;
-  const reached = left <= 0;
   return `<div class="goal">
     <div class="goal-head">
       <span class="goal-name">${name}</span>
-      <span class="goal-num"><b>${fmt(now, digits)}</b> ${unit} ${reached ? '· erreicht' : `· noch ${fmt(left, digits)}`}</span>
+      <span class="goal-num"><b>${fmt(now, digits)}</b> ${unit} ${left <= 0 ? '· erreicht' : `· noch ${fmt(left, digits)}`}</span>
     </div>
     <div class="track"><div class="fill" style="width:${pct.toFixed(1)}%"></div></div>
     <div class="goal-foot"><span>Start ${fmt(start, digits)}</span><span>Ziel ${fmt(target, digits)}</span></div>
@@ -354,21 +468,20 @@ const lastOf = (rows, key) => { for (let i = rows.length - 1; i >= 0; i--) { con
 
 /* ── Diagramm ──────────────────────────────────────────── */
 
-function renderChips(rows) {
-  const avail = Object.entries(METRICS)
-    .filter(([, m]) => !m.optional || rows.some(r => m.pick(r) != null));
-  // Oberarm/Brust verschwinden wieder, sobald ihre letzten Werte gelöscht sind.
-  if (!avail.some(([key]) => key === metric)) metric = 'bf';
-  $('metricChips').innerHTML = avail
+function renderChips() {
+  $('metricChips').innerHTML = Object.entries(METRICS)
     .map(([key, m]) => `<button class="chip" role="tab" data-metric="${key}" aria-selected="${key === metric}">${m.label}</button>`)
     .join('');
 }
 
 function renderChart(rows) {
-  const m = METRICS[metric];
   const svg = $('chart');
-  const pts = rows.map(r => ({ x: new Date(r.date + 'T00:00:00').getTime(), y: m.pick(r), row: r }))
-                  .filter(p => p.y != null);
+  const wrap = svg.parentElement;
+  const W = wrap.clientWidth;
+  if (!W) return;  // Seite gerade unsichtbar — showPage() zeichnet dann neu.
+
+  const m = METRICS[metric];
+  const pts = rows.map(r => ({ x: Date.parse(r.date), y: m.pick(r), row: r })).filter(p => p.y != null);
 
   $('chartHint').textContent = HINTS[metric] || '';
 
@@ -377,13 +490,12 @@ function renderChart(rows) {
     $('chartEmpty').hidden = false;
     $('chartEmpty').textContent = pts.length === 0
       ? `Für ${m.label} gibt es noch keine Werte.`
-      : `Noch zu wenig Daten — trag eine zweite Messung ein, dann zeichne ich die Linie.`;
+      : 'Noch zu wenig Daten — trag eine zweite Messung ein, dann zeichne ich die Linie.';
     return;
   }
   svg.hidden = false;
   $('chartEmpty').hidden = true;
 
-  const W = Math.max(260, svg.parentElement.clientWidth);
   const H = 210;
   const pad = { t: 14, r: 12, b: 24, l: 38 };
   svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
@@ -408,27 +520,23 @@ function renderChart(rows) {
 
   const parts = [];
 
-  // Zielband
   if (tg.band) {
     const [a, b] = [sy(Math.max(...tg.band)), sy(Math.min(...tg.band))];
     parts.push(`<rect class="target-band" x="${pad.l}" y="${a.toFixed(1)}" width="${(W - pad.l - pad.r).toFixed(1)}" height="${Math.abs(b - a).toFixed(1)}" rx="2"/>`);
   }
 
-  // Gitter und y-Beschriftung
   for (const v of ticks(lo, hi, 4)) {
     const y = sy(v);
     parts.push(`<line class="grid-line" x1="${pad.l}" y1="${y.toFixed(1)}" x2="${W - pad.r}" y2="${y.toFixed(1)}"/>`);
     parts.push(`<text class="axis-text" x="${pad.l - 6}" y="${(y + 3).toFixed(1)}" text-anchor="end">${fmt(v, tickDigits(lo, hi))}</text>`);
   }
 
-  // Ziellinien
   for (const l of (tg.lines || [])) {
     const y = sy(l.v);
     parts.push(`<line class="target-line" x1="${pad.l}" y1="${y.toFixed(1)}" x2="${W - pad.r}" y2="${y.toFixed(1)}"/>`);
     parts.push(`<text class="target-text" x="${W - pad.r}" y="${(y - 4).toFixed(1)}" text-anchor="end">${l.label}</text>`);
   }
 
-  // Fläche und Linie
   const line = pts.map((p, i) => `${i ? 'L' : 'M'}${sx(p.x).toFixed(1)},${sy(p.y).toFixed(1)}`).join('');
   parts.push(`<path class="series-area" d="${line}L${sx(pts[pts.length - 1].x).toFixed(1)},${(H - pad.b).toFixed(1)}L${sx(pts[0].x).toFixed(1)},${(H - pad.b).toFixed(1)}Z"/>`);
   parts.push(`<path class="series-line" d="${line}"/>`);
@@ -436,23 +544,19 @@ function renderChart(rows) {
   // Geglätteter Trend (nur wo Tagesschwankung die Einzelwerte verrauscht)
   if (m.trend && pts.length >= 4) {
     const avg = movingAvg(pts.map(p => p.y), 3);
-    const td = pts.map((p, i) => `${i ? 'L' : 'M'}${sx(p.x).toFixed(1)},${sy(avg[i]).toFixed(1)}`).join('');
-    parts.push(`<path class="trend-line" d="${td}"/>`);
+    parts.push(`<path class="trend-line" d="${pts.map((p, i) => `${i ? 'L' : 'M'}${sx(p.x).toFixed(1)},${sy(avg[i]).toFixed(1)}`).join('')}"/>`);
   }
 
-  // Punkte und Trefferflächen
   pts.forEach((p, i) => {
     const isLast = i === pts.length - 1;
     parts.push(`<circle class="dot${isLast ? ' dot-last' : ''}" cx="${sx(p.x).toFixed(1)}" cy="${sy(p.y).toFixed(1)}" r="${isLast ? 4.5 : 3.5}"/>`);
     parts.push(`<circle class="hit" cx="${sx(p.x).toFixed(1)}" cy="${sy(p.y).toFixed(1)}" r="16" data-i="${i}"/>`);
   });
 
-  // x-Beschriftung: erster, letzter, ggf. einer in der Mitte
   const idx = pts.length <= 4 ? pts.map((_, i) => i) : [0, Math.floor((pts.length - 1) / 2), pts.length - 1];
   for (const i of new Set(idx)) {
-    const p = pts[i];
     const anchor = i === 0 ? 'start' : i === pts.length - 1 ? 'end' : 'middle';
-    parts.push(`<text class="axis-text" x="${sx(p.x).toFixed(1)}" y="${H - 7}" text-anchor="${anchor}">${fmtDateShort(p.row.date)}</text>`);
+    parts.push(`<text class="axis-text" x="${sx(pts[i].x).toFixed(1)}" y="${H - 7}" text-anchor="${anchor}">${fmtDateShort(pts[i].row.date)}</text>`);
   }
 
   svg.innerHTML = parts.join('');
@@ -461,8 +565,7 @@ function renderChart(rows) {
 
 function movingAvg(arr, win) {
   return arr.map((_, i) => {
-    const from = Math.max(0, i - win + 1);
-    const slice = arr.slice(from, i + 1);
+    const slice = arr.slice(Math.max(0, i - win + 1), i + 1);
     return slice.reduce((a, b) => a + b, 0) / slice.length;
   });
 }
@@ -486,8 +589,7 @@ function wireTooltip(svg, pts, sx, sy, m) {
 
   const show = i => {
     const p = pts[i];
-    const rect = svg.getBoundingClientRect();
-    const scale = rect.width / svg.viewBox.baseVal.width;
+    const scale = svg.getBoundingClientRect().width / svg.viewBox.baseVal.width;
     tip.textContent = `${fmtDate(p.row.date)} · ${fmt(p.y, m.digits)} ${m.unit}`;
     tip.style.left = `${sx(p.x) * scale}px`;
     tip.style.top = `${sy(p.y) * scale}px`;
@@ -521,11 +623,15 @@ function renderLedger(rows) {
     if (r.weight != null) vals.push(`<span><b>${fmt(r.weight, 2)}</b><span class="k">kg</span></span>`);
     if (r.waist != null) vals.push(`<span><b>${fmt(r.waist, 1)}</b><span class="k">cm</span></span>`);
     if (r.d.bf != null) vals.push(`<span><b>${fmt(r.d.bf, 1)}</b><span class="k">%</span></span>`);
-    if (r.arm != null) vals.push(`<span class="k">Arm ${fmt(r.arm, 1)}</span>`);
-    if (r.chest != null) vals.push(`<span class="k">Brust ${fmt(r.chest, 1)}</span>`);
+    const thumb = photoIds.has(r.id)
+      ? `<button class="row-photo" data-photo-id="${r.id}" aria-label="Foto vom ${fmtDate(r.date)} ansehen"><img alt=""></button>`
+      : '';
     return `<div class="row">
       <span class="row-date">${fmtDate(r.date)}</span>
-      <span class="row-vals">${vals.join('') || '<span class="k">keine Werte</span>'}</span>
+      <span class="row-main">
+        ${thumb}
+        <span class="row-vals">${vals.join('') || '<span class="k">keine Werte</span>'}</span>
+      </span>
       <span class="row-acts">
         <button class="icon-btn" data-edit="${r.id}" aria-label="Messung vom ${fmtDate(r.date)} bearbeiten">Ändern</button>
         <button class="icon-btn del" data-del="${r.id}" aria-label="Messung vom ${fmtDate(r.date)} löschen">Löschen</button>
@@ -533,6 +639,15 @@ function renderLedger(rows) {
       ${r.note ? `<span class="row-note">${escapeHtml(r.note)}</span>` : ''}
     </div>`;
   }).join('');
+
+  hydrateThumbs();
+}
+
+async function hydrateThumbs() {
+  for (const btn of document.querySelectorAll('[data-photo-id]')) {
+    const url = await photoUrl(btn.dataset.photoId);
+    if (url) btn.querySelector('img').src = url;
+  }
 }
 
 const escapeHtml = s => s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -551,13 +666,32 @@ function renderSettings(rows) {
   if (lean == null) { $('targetWeightNote').textContent = ''; return; }
   const hi = weightAtBf(lean, t.bfHigh), lo = weightAtBf(lean, t.bfLow);
   const now = lastOf(rows, 'weight');
-  const dHi = now != null ? now - hi : null, dLo = now != null ? now - lo : null;
   $('targetWeightNote').textContent =
     `Bei ${fmt(lean, 1)} kg Magermasse entspricht das einem Zielgewicht von ${fmt(hi, 1)} kg (${fmt(t.bfHigh, 0)} %` +
-    (dHi != null ? `, noch ${fmt(dHi, 1)} kg Fett` : '') +
+    (now != null ? `, noch ${fmt(now - hi, 1)} kg Fett` : '') +
     `) bis ${fmt(lo, 1)} kg (${fmt(t.bfLow, 0)} %` +
-    (dLo != null ? `, noch ${fmt(dLo, 1)} kg Fett` : '') +
+    (now != null ? `, noch ${fmt(now - lo, 1)} kg Fett` : '') +
     `). Nicht leichter werden ist das Ziel, sondern Fett gegen den Erhalt der Muskeln tauschen.`;
+}
+
+async function renderStorage() {
+  const n = photoIds.size;
+  const teile = [`${state.entries.length} ${state.entries.length === 1 ? 'Messung' : 'Messungen'}, ${n} ${n === 1 ? 'Foto' : 'Fotos'}.`];
+
+  if (navigator.storage?.estimate) {
+    try {
+      const { usage, quota } = await navigator.storage.estimate();
+      teile.push(`Belegt ${fmtBytes(usage)} von ${fmtBytes(quota)}.`);
+    } catch (err) { /* nicht kritisch */ }
+  }
+  if (navigator.storage?.persisted) {
+    try {
+      teile.push(await navigator.storage.persisted()
+        ? 'Dauerhaft gespeichert: ja — Android räumt die Daten nicht bei Platzmangel weg.'
+        : 'Dauerhaft gespeichert: nein — bei Speichermangel darf Android die Daten löschen. Umso wichtiger ist der CSV-Export.');
+    } catch (err) { /* nicht kritisch */ }
+  }
+  $('storageNote').textContent = teile.join(' ');
 }
 
 /* ── Formular ──────────────────────────────────────────── */
@@ -568,14 +702,36 @@ function readForm() {
     weight: num($('f-weight').value),
     waist: num($('f-waist').value),
     neck: num($('f-neck').value),
-    arm: num($('f-arm').value),
-    chest: num($('f-chest').value),
     note: $('f-note').value.trim()
   };
 }
 
+function setFormPhoto(blob) {
+  if (formPhotoUrl) { URL.revokeObjectURL(formPhotoUrl); formPhotoUrl = null; }
+  const wrap = $('photoPreview');
+  if (!blob) {
+    wrap.hidden = true;
+    $('photoPreviewImg').removeAttribute('src');
+    $('photoBtn').textContent = 'Foto wählen';
+  } else {
+    formPhotoUrl = URL.createObjectURL(blob);
+    $('photoPreviewImg').src = formPhotoUrl;
+    wrap.hidden = false;
+    $('photoBtn').textContent = 'Foto ersetzen';
+  }
+  updatePhotoField();
+}
+
+/** Das Foto gehört zur Taillenmessung — ohne Taille kein Foto. */
+function updatePhotoField() {
+  const hatTaille = num($('f-waist').value) != null;
+  $('photoField').hidden = !(hatTaille || !$('photoPreview').hidden);
+}
+
 function resetForm() {
   editingId = null;
+  pendingPhoto = null;
+  photoCleared = false;
   $('entryForm').reset();
   $('f-date').value = todayISO();
   // Der Hals ändert sich kaum — letzten bekannten Wert vorschlagen.
@@ -586,25 +742,28 @@ function resetForm() {
   $('submitBtn').textContent = 'Eintragen';
   $('cancelEdit').hidden = true;
   $('formError').hidden = true;
+  setFormPhoto(null);
   updatePreview();
 }
 
-function startEdit(id) {
+async function startEdit(id) {
   const e = state.entries.find(x => x.id === id);
   if (!e) return;
   editingId = id;
+  pendingPhoto = null;
+  photoCleared = false;
   $('f-date').value = e.date;
   $('f-weight').value = e.weight != null ? fmt(e.weight, 2) : '';
   $('f-waist').value = e.waist != null ? fmt(e.waist, 1) : '';
   $('f-neck').value = e.neck != null ? fmt(e.neck, 1) : '';
-  $('f-arm').value = e.arm != null ? fmt(e.arm, 1) : '';
-  $('f-chest').value = e.chest != null ? fmt(e.chest, 1) : '';
   $('f-note').value = e.note || '';
   $('formTitle').textContent = `Messung vom ${fmtDate(e.date)}`;
   $('submitBtn').textContent = 'Aktualisieren';
   $('cancelEdit').hidden = false;
   $('formError').hidden = true;
+  setFormPhoto(photoIds.has(id) ? await photoGet(id) : null);
   updatePreview();
+  showPage('messen');
   $('entryForm').scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
@@ -621,7 +780,7 @@ function updatePreview() {
   box.innerHTML = `Körperfett <b>${fmt(bf, 1)} %</b> · Fettmasse <b>${fmt(fatMass, 1)} kg</b> · Magermasse <b>${fmt(f.weight - fatMass, 1)} kg</b>`;
 }
 
-function submitForm(ev) {
+async function submitForm(ev) {
   ev.preventDefault();
   const f = readForm();
   const err = $('formError');
@@ -637,20 +796,37 @@ function submitForm(ev) {
   const clash = state.entries.find(e => e.date === f.date && e.id !== editingId);
   if (clash) {
     if (!confirm(`Für den ${fmtDate(f.date)} gibt es schon eine Messung. Überschreiben?`)) return;
-    state.entries = state.entries.filter(e => e.id !== clash.id);
+    await removeEntry(clash.id);
   }
 
+  let id;
   if (editingId) {
-    const i = state.entries.findIndex(e => e.id === editingId);
+    id = editingId;
+    const i = state.entries.findIndex(e => e.id === id);
     if (i >= 0) state.entries[i] = { ...state.entries[i], ...f };
-    toast('Messung aktualisiert');
   } else {
-    state.entries.push({ id: uid(), ...f });
-    toast('Messung eingetragen');
+    id = uid();
+    state.entries.push({ id, ...f });
+  }
+
+  try {
+    if (pendingPhoto) {
+      await photoPut(id, pendingPhoto);
+      forgetPhotoUrl(id);
+      photoIds.add(id);
+    } else if (photoCleared && photoIds.has(id)) {
+      await photoDel(id);
+      forgetPhotoUrl(id);
+      photoIds.delete(id);
+    }
+  } catch (e) {
+    console.error(e);
+    toast('Das Foto konnte nicht gespeichert werden.');
   }
 
   err.hidden = true;
   save();
+  toast(editingId ? 'Messung aktualisiert' : 'Messung eingetragen');
   resetForm();
   render();
 }
@@ -660,13 +836,72 @@ function fail(el, msg) {
   el.hidden = false;
 }
 
+async function removeEntry(id) {
+  state.entries = state.entries.filter(x => x.id !== id);
+  if (photoIds.has(id)) {
+    try { await photoDel(id); } catch (e) { console.error(e); }
+    forgetPhotoUrl(id);
+    photoIds.delete(id);
+  }
+}
+
+/* ── Fotoansicht ───────────────────────────────────────── */
+
+let lightboxId = null;
+
+async function openLightbox(id) {
+  const entry = state.entries.find(e => e.id === id);
+  const url = await photoUrl(id);
+  if (!url || !entry) return;
+  lightboxId = id;
+  $('lightboxImg').src = url;
+  $('lightboxImg').alt = `Foto vom ${fmtDate(entry.date)}`;
+  $('lightboxDate').textContent = fmtDate(entry.date);
+  $('lightbox').hidden = false;
+  document.body.style.overflow = 'hidden';
+}
+
+function closeLightbox() {
+  $('lightbox').hidden = true;
+  $('lightboxImg').removeAttribute('src');
+  lightboxId = null;
+  document.body.style.overflow = '';
+}
+
+async function downloadPhoto() {
+  if (!lightboxId) return;
+  const entry = state.entries.find(e => e.id === lightboxId);
+  const url = await photoUrl(lightboxId);
+  if (!url) return;
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `rekomposition-${entry.date}.jpg`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  toast('Foto heruntergeladen');
+}
+
+async function deletePhotoFromLightbox() {
+  if (!lightboxId) return;
+  const entry = state.entries.find(e => e.id === lightboxId);
+  if (!confirm(`Foto vom ${fmtDate(entry.date)} wirklich löschen? Die Messwerte bleiben erhalten.`)) return;
+  const id = lightboxId;
+  closeLightbox();
+  try { await photoDel(id); } catch (e) { console.error(e); }
+  forgetPhotoUrl(id);
+  photoIds.delete(id);
+  render();
+  toast('Foto gelöscht');
+}
+
 /* ── CSV ───────────────────────────────────────────────
    Semikolon und Komma-Dezimaltrenner, damit die Datei in
    deutschem Excel direkt sauber aufgeht.
    ────────────────────────────────────────────────────── */
 
-const CSV_COLS = ['Datum', 'Gewicht (kg)', 'Taille (cm)', 'Hals (cm)', 'Oberarm (cm)', 'Brust (cm)',
-                  'Körperfett (%)', 'Fettmasse (kg)', 'Magermasse (kg)', 'Taille/Größe', 'Notiz'];
+const CSV_COLS = ['Datum', 'Gewicht (kg)', 'Taille (cm)', 'Hals (cm)',
+                  'Körperfett (%)', 'Fettmasse (kg)', 'Magermasse (kg)', 'Taille/Größe', 'Foto', 'Notiz'];
 
 function exportCsv() {
   const rows = decorate(state.entries, state.settings.heightCm);
@@ -676,9 +911,9 @@ function exportCsv() {
     lines.push([
       fmtDate(r.date),
       cell(r.weight?.toFixed(2)), cell(r.waist?.toFixed(1)), cell(r.neck?.toFixed(1)),
-      cell(r.arm?.toFixed(1)), cell(r.chest?.toFixed(1)),
       cell(r.d.bf?.toFixed(1)), cell(r.d.fatMass?.toFixed(1)), cell(r.d.leanMass?.toFixed(1)),
       cell(r.d.whtr?.toFixed(3)),
+      photoIds.has(r.id) ? 'ja' : 'nein',
       `"${(r.note || '').replace(/"/g, '""')}"`
     ].join(';'));
   }
@@ -692,7 +927,7 @@ function exportCsv() {
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
-  status(`${rows.length} Messungen exportiert.`);
+  status(`${rows.length} Messungen exportiert. Fotos sind nicht enthalten.`);
 }
 
 function parseCsv(text) {
@@ -726,24 +961,20 @@ function importCsv(text) {
   const iDate = col('datum', 'date');
   const iWeight = col('gewicht', 'weight');
   if (iDate < 0 || iWeight < 0) return status('Spalten "Datum" und "Gewicht" fehlen.', true);
+  // "taille (" zuerst, sonst greift die Spalte "Taille/Größe".
   const iWaist = col('taille (', 'taille', 'waist');
   const iNeck = col('hals', 'neck');
-  const iArm = col('oberarm', 'arm');
-  const iChest = col('brust', 'chest');
   const iNote = col('notiz', 'note');
 
   let added = 0, updated = 0, skipped = 0;
   for (const r of rows.slice(1)) {
     const date = toIso(r[iDate]);
-    if (!date) { skipped++; continue; }
     const weight = num(r[iWeight]);
-    if (weight == null) { skipped++; continue; }
+    if (!date || weight == null) { skipped++; continue; }
     const entry = {
       date, weight,
       waist: iWaist >= 0 ? num(r[iWaist]) : null,
       neck: iNeck >= 0 ? num(r[iNeck]) : null,
-      arm: iArm >= 0 ? num(r[iArm]) : null,
-      chest: iChest >= 0 ? num(r[iChest]) : null,
       note: iNote >= 0 ? (r[iNote] || '').trim() : ''
     };
     const existing = state.entries.find(e => e.date === date);
@@ -754,7 +985,7 @@ function importCsv(text) {
   save();
   resetForm();
   render();
-  status(`${added} neu, ${updated} aktualisiert${skipped ? `, ${skipped} übersprungen` : ''}.`);
+  status(`${added} neu, ${updated} aktualisiert${skipped ? `, ${skipped} übersprungen` : ''}. Fotos enthält eine CSV nicht.`);
 }
 
 /** Akzeptiert 01.03.2026 wie 2026-03-01. */
@@ -763,8 +994,7 @@ function toIso(s) {
   const v = s.trim();
   if (isDate(v)) return v;
   const m = v.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
-  if (!m) return null;
-  return `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
+  return m ? `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}` : null;
 }
 
 /* ── Rückmeldungen ─────────────────────────────────────── */
@@ -789,38 +1019,91 @@ function status(msg, isError = false) {
   el.className = isError ? 'status err' : 'status';
   el.hidden = false;
   clearTimeout(statusTimer);
-  statusTimer = setTimeout(() => { el.hidden = true; }, 6000);
+  statusTimer = setTimeout(() => { el.hidden = true; }, 8000);
 }
 
 /* ── Verdrahtung ───────────────────────────────────────── */
 
 function wire() {
+  // Seitenwechsel
+  document.querySelector('.tabs').addEventListener('click', ev => {
+    const t = ev.target.closest('[data-page]');
+    if (t) showPage(t.dataset.page);
+  });
+
+  // "?"-Verweise auf die Wissensseite. Die Ziel-ID beginnt mit dem Seitennamen.
+  document.addEventListener('click', ev => {
+    const g = ev.target.closest('[data-goto]');
+    if (!g) return;
+    const target = g.dataset.goto;
+    showPage(target.split('-')[0]);
+    $(target)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+
   $('entryForm').addEventListener('submit', submitForm);
   ['f-weight', 'f-waist', 'f-neck'].forEach(id => $(id).addEventListener('input', updatePreview));
+  $('f-waist').addEventListener('input', updatePhotoField);
   $('cancelEdit').addEventListener('click', resetForm);
 
+  // Foto wählen
+  $('photoBtn').addEventListener('click', () => $('f-photo').click());
+  $('photoRemove').addEventListener('click', () => {
+    pendingPhoto = null;
+    photoCleared = true;
+    setFormPhoto(null);
+  });
+  $('f-photo').addEventListener('change', async ev => {
+    const file = ev.target.files?.[0];
+    ev.target.value = '';
+    if (!file) return;
+    try {
+      const blob = await shrinkImage(file);
+      pendingPhoto = blob;
+      photoCleared = false;
+      setFormPhoto(blob);
+      toast(`Foto bereit (${fmtBytes(blob.size)})`);
+    } catch (err) {
+      console.error(err);
+      toast('Das Bild konnte nicht gelesen werden.');
+    }
+  });
+
+  // Diagramm-Umschalter
   $('metricChips').addEventListener('click', ev => {
     const btn = ev.target.closest('[data-metric]');
     if (!btn) return;
     metric = btn.dataset.metric;
-    const rows = decorate(state.entries, state.settings.heightCm);
-    renderChips(rows);
-    renderChart(rows);
+    renderChips();
+    renderChart(decorate(state.entries, state.settings.heightCm));
   });
 
-  $('ledger').addEventListener('click', ev => {
+  // Messungsliste
+  $('ledger').addEventListener('click', async ev => {
+    const foto = ev.target.closest('[data-photo-id]');
+    if (foto) return openLightbox(foto.dataset.photoId);
+
     const edit = ev.target.closest('[data-edit]');
     if (edit) return startEdit(edit.dataset.edit);
+
     const del = ev.target.closest('[data-del]');
     if (!del) return;
     const e = state.entries.find(x => x.id === del.dataset.del);
-    if (!e || !confirm(`Messung vom ${fmtDate(e.date)} wirklich löschen?`)) return;
-    state.entries = state.entries.filter(x => x.id !== del.dataset.del);
+    if (!e) return;
+    const mitFoto = photoIds.has(e.id) ? ' Das zugehörige Foto wird mitgelöscht.' : '';
+    if (!confirm(`Messung vom ${fmtDate(e.date)} wirklich löschen?${mitFoto}`)) return;
+    await removeEntry(del.dataset.del);
     save();
     if (editingId === del.dataset.del) resetForm();
     render();
     toast('Messung gelöscht');
   });
+
+  // Fotoansicht
+  $('lightboxClose').addEventListener('click', closeLightbox);
+  $('lightboxDownload').addEventListener('click', downloadPhoto);
+  $('lightboxDelete').addEventListener('click', deletePhotoFromLightbox);
+  $('lightbox').addEventListener('click', ev => { if (ev.target === $('lightbox')) closeLightbox(); });
+  document.addEventListener('keydown', ev => { if (ev.key === 'Escape' && !$('lightbox').hidden) closeLightbox(); });
 
   // Einstellungen: Wert übernehmen, sobald das Feld verlassen wird.
   const settingFields = {
@@ -851,9 +1134,13 @@ function wire() {
     ev.target.value = '';
   });
 
-  $('resetBtn').addEventListener('click', () => {
-    if (!confirm('Wirklich alle Messungen und Einstellungen löschen? Das lässt sich nicht rückgängig machen — exportier vorher eine CSV.')) return;
+  $('resetBtn').addEventListener('click', async () => {
+    if (!confirm('Wirklich alle Messungen, Fotos und Einstellungen löschen? Das lässt sich nicht rückgängig machen — exportier vorher eine CSV und sichere deine Fotos.')) return;
     localStorage.removeItem(STORE_KEY);
+    try { await photoClear(); } catch (e) { console.error(e); }
+    photoUrlCache.forEach(u => URL.revokeObjectURL(u));
+    photoUrlCache.clear();
+    photoIds.clear();
     state = structuredClone(DEFAULTS);
     save();
     resetForm();
@@ -876,22 +1163,20 @@ function wireInstall() {
   window.addEventListener('beforeinstallprompt', ev => {
     ev.preventDefault();
     installEvent = ev;
-    let btn = $('installBtn');
-    if (!btn) {
-      btn = document.createElement('button');
-      btn.id = 'installBtn';
-      btn.className = 'btn';
-      btn.style.cssText = 'padding:5px 11px;font-size:0.75rem;border-radius:99px';
-      btn.textContent = 'Installieren';
-      btn.addEventListener('click', async () => {
-        if (!installEvent) return;
-        installEvent.prompt();
-        await installEvent.userChoice;
-        installEvent = null;
-        btn.remove();
-      });
-      document.querySelector('.topbar-inner').appendChild(btn);
-    }
+    if ($('installBtn')) return;
+    const btn = document.createElement('button');
+    btn.id = 'installBtn';
+    btn.className = 'btn';
+    btn.style.cssText = 'padding:5px 11px;font-size:0.75rem;border-radius:99px';
+    btn.textContent = 'Installieren';
+    btn.addEventListener('click', async () => {
+      if (!installEvent) return;
+      installEvent.prompt();
+      await installEvent.userChoice;
+      installEvent = null;
+      btn.remove();
+    });
+    document.querySelector('.topbar-inner').appendChild(btn);
   });
 }
 
@@ -899,10 +1184,19 @@ function wireInstall() {
 
 async function init() {
   state = load();
+
+  // Foto-IDs einmalig einlesen, damit die Liste synchron zeichnen kann.
+  try {
+    (await photoAllKeys()).forEach(k => photoIds.add(k));
+  } catch (err) {
+    console.warn('Fotospeicher nicht verfügbar:', err);
+  }
+
   wire();
   wireInstall();
   resetForm();
   render();
+  showPage('messen');
 
   // Sofort registrieren, nicht erst beim load-Ereignis: Das kann bereits
   // durch sein, während weiter unten auf persist() gewartet wird — der
@@ -926,6 +1220,7 @@ async function init() {
   // Bittet Android, den lokalen Speicher nicht bei Platzmangel zu räumen.
   if (navigator.storage?.persist) {
     try { await navigator.storage.persist(); } catch (err) { /* nicht kritisch */ }
+    renderStorage();
   }
 }
 

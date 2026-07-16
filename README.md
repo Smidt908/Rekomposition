@@ -7,6 +7,17 @@ Verlauf als Diagramm.
 Der Leitgedanke: Nicht leichter werden ist das Ziel, sondern Fett gegen den Erhalt der
 Muskeln tauschen. Deshalb steht Körperfett groß im Vordergrund und nicht das Gewicht.
 
+## Die vier Seiten
+
+Oben wechselst du über die Reiter:
+
+| Reiter | Inhalt |
+|---|---|
+| **Messen** | Neue Messung eintragen, letzte Ablesung, alle Messungen |
+| **Fortschritt** | Weg zum Ziel, Verlaufsdiagramm |
+| **Wissen** | Körperfett-Grenzwerte, wie die Navy-Methode funktioniert und wo sie schwächelt |
+| **Einstellungen** | Körpergröße, Zielwerte, CSV-Export/Import, Speicherplatz |
+
 ## Aufs Handy bringen
 
 Android lässt sich eine lokale Datei (`file://…` aus dem Download-Ordner) **nicht** auf
@@ -21,7 +32,7 @@ als vollwertige App mit eigenem Icon, im Vollbild und offline nutzbar.
 3. Name: `rekomposition`.
 4. Sichtbarkeit **Public** — GitHub Pages funktioniert im Gratis-Tarif nur mit
    öffentlichen Repositories. Deshalb steht in diesen Dateien bewusst nichts
-   Persönliches; deine Messwerte bleiben ohnehin nur auf dem Handy.
+   Persönliches; deine Messwerte und Fotos bleiben ohnehin nur auf dem Handy.
 5. *„Add a README file"* **nicht** ankreuzen — eine README liegt hier schon.
 6. **Create repository**.
 
@@ -69,24 +80,14 @@ sind auch die Daten weg. Eine GitHub-Pages-Adresse bleibt, solange das Repositor
 
 Die App startet leer. Beim ersten Öffnen:
 
-1. **Einstellungen & Daten** aufklappen und deine **Körpergröße** eintragen — ohne sie
-   lässt sich das Körperfett nicht berechnen. Dort kannst du auch die Zielwerte anpassen
-   (Faustregel: das langfristige Taillenziel ist die halbe Körpergröße).
-2. Unter **Neue Messung** Gewicht, Taille und Hals eintragen. Das Körperfett rechnet sich
+1. Reiter **Einstellungen** → deine **Körpergröße** eintragen. Ohne sie lässt sich das
+   Körperfett nicht berechnen. Dort passt du auch die Zielwerte an (Faustregel: das
+   langfristige Taillenziel ist die halbe Körpergröße).
+2. Reiter **Messen** → Gewicht, Taille und Hals eintragen. Das Körperfett rechnet sich
    schon beim Tippen vor.
 
 Hast du schon eine CSV mit älteren Messungen, kannst du sie stattdessen unter
-*Einstellungen & Daten → CSV importieren* einlesen.
-
-## Deine Daten
-
-Sie liegen **ausschließlich auf dem Gerät**, in dem Browser, in dem du sie einträgst.
-Es gibt bewusst keine Cloud und damit auch keinen Sync zwischen Geräten.
-
-Das heißt konkret: Exportier regelmäßig eine CSV (*Einstellungen & Daten → CSV
-exportieren*). Sonst sind die Messungen weg, wenn du das Handy wechselst oder die
-Browserdaten löschst. Die CSV öffnet sich direkt in deutschem Excel (Semikolon als
-Trenner, Komma als Dezimalzeichen) und lässt sich genauso wieder importieren.
+*Einstellungen → CSV importieren* einlesen.
 
 ## Was die App kann
 
@@ -94,24 +95,58 @@ Trenner, Komma als Dezimalzeichen) und lässt sich genauso wieder importieren.
 - **Nur das Gewicht ist Pflicht.** Taille und Hals brauchst du nur alle 2–4 Wochen —
   Messungen ohne Taille sind völlig in Ordnung, sie bekommen dann nur keinen
   Körperfettwert. Der Halsumfang wird aus der letzten Messung fortgeschrieben.
+- **Erinnerung**, sobald deine letzte Taillenmessung 28 Tage her ist.
 - **Diagramm** für Körperfett, Gewicht, Taille, Fett- und Magermasse mit Ziellinien.
-  Oberarm und Brust erscheinen, sobald du Werte dafür einträgst. Beim Gewicht liegt
-  zusätzlich eine geglättete Trendlinie darüber, weil Einzelwerte täglich um 1–2 kg
-  schwanken.
+  Beim Gewicht liegt zusätzlich eine geglättete Trendlinie darüber, weil Einzelwerte
+  täglich um 1–2 kg schwanken.
 - **Zielbalken** für Taille und Körperfett, gemessen von deinem Startwert aus.
-- **Zielwerte und Körpergröße** sind in den Einstellungen änderbar; das Zielgewicht
-  rechnet sich daraus neu.
+- **Zielwerte und Körpergröße** sind änderbar; das Zielgewicht rechnet sich daraus neu.
 
-Grün heißt immer: in die Zielrichtung. Terrakotta: dagegen. Bei Magermasse, Oberarm und
-Brust ist die Zielrichtung nach oben, bei allen anderen nach unten.
+Grün heißt immer: in die Zielrichtung. Terrakotta: dagegen. Bei der Magermasse ist die
+Zielrichtung nach oben, bei allen anderen nach unten.
+
+## Fotos
+
+Das Foto hängt an der Taillenmessung: Das Feld erscheint im Formular erst, sobald du eine
+Taille eingetragen hast. So entsteht von selbst der 4-Wochen-Rhythmus.
+
+Beim Speichern wird das Bild auf maximal 1400 Pixel verkleinert und neu als JPEG
+kodiert. Das spart Platz (aus einem 4-MB-Handyfoto werden ein paar hundert Kilobyte) und
+entfernt nebenbei sämtliche Kameradaten aus der Datei — **inklusive GPS-Position**. Die
+Bilder liegen in der IndexedDB dieses Geräts und verlassen es nie.
+
+In der Messungsliste erscheint ein Miniaturbild; ein Tipp darauf öffnet es groß, mit
+Knöpfen zum Herunterladen und Löschen.
+
+Für den Vergleich zählt nur eines: **gleiche Pose, gleiches Licht, gleiche Uhrzeit.**
+Sonst vergleichst du Schatten statt Bauch.
+
+## Deine Daten
+
+Sie liegen **ausschließlich auf dem Gerät**, in dem Browser, in dem du sie einträgst.
+Es gibt bewusst keine Cloud und damit auch keinen Sync zwischen Geräten.
+
+Exportier deshalb regelmäßig eine CSV (*Einstellungen → CSV exportieren*). Sonst sind die
+Messungen weg, wenn du das Handy wechselst oder die Browserdaten löschst. Die CSV öffnet
+sich direkt in deutschem Excel (Semikolon als Trenner, Komma als Dezimalzeichen) und
+lässt sich genauso wieder importieren.
+
+**Die CSV enthält keine Fotos.** Bilder passen nicht in eine Textdatei — die Spalte
+`Foto` vermerkt nur, ob es zu einer Messung eines gab. Willst du die Bilder sichern,
+lade sie einzeln über die Fotoansicht herunter. Unter *Einstellungen → Speicherplatz*
+siehst du, wie viele es sind und wie viel Platz sie belegen.
+
+Dort steht auch, ob Android deine Daten als **dauerhaft** markiert hat. Steht dort
+„nein", darf das System sie bei Speichermangel löschen — dann ist der CSV-Export umso
+wichtiger. Installierte Apps bekommen diese Zusage in der Regel automatisch.
 
 ## Dateien
 
 | Datei | Zweck |
 |---|---|
-| `index.html` | Aufbau der Seite |
+| `index.html` | Aufbau der vier Seiten |
 | `styles.css` | Gestaltung, hell und dunkel |
-| `app.js` | Berechnung, Diagramm, Speicherung, CSV |
+| `app.js` | Berechnung, Diagramm, Speicherung, Fotos, CSV |
 | `manifest.webmanifest` | Name, Icons, Vollbild — macht sie installierbar |
 | `sw.js` | Service Worker: Offline-Betrieb |
 | `icons/` | App-Icons (192, 512, maskierbar) |
@@ -120,14 +155,19 @@ Kein Framework, keine Abhängigkeiten, kein Build-Schritt. Hochladen genügt.
 
 ## Wenn du etwas änderst
 
-Erhöhe die Versionsnummer in `sw.js` (`const CACHE = 'rekomposition-v1'` → `-v2`).
-Sonst behalten bereits installierte Geräte die alten Dateien aus ihrem Cache.
+Erhöhe die Versionsnummer in `sw.js` (`const CACHE = 'rekomposition-v3'` → `-v4`).
+Sonst behalten bereits installierte Geräte die alten Dateien aus ihrem Cache. Die App
+lädt sich nach einem Update einmalig selbst neu, sobald die neue Fassung übernimmt.
 
 ## Kleingedrucktes
 
 Die Navy-Formel arbeitet nur mit Umfängen und hat gegenüber einer Labormessung (DEXA)
 eine Unschärfe von etwa ±3 Prozentpunkten. Als Startwert und vor allem für den Trend ist
-das brauchbar — nur der Trend zählt, nicht der einzelne Absolutwert.
+das brauchbar — nur der Trend zählt, nicht der einzelne Absolutwert. Die ausführliche
+Erklärung dazu steht im Reiter **Wissen**.
 
 Hinterlegt ist die Formel für Männer (aus Hals, Taille und Größe). Die Variante für
 Frauen bräuchte zusätzlich den Hüftumfang und ist nicht eingebaut.
+
+Die Richtwerte im Reiter *Wissen* stammen aus der Sportwissenschaft und sind zur
+Orientierung gedacht, nicht als medizinische Beratung.

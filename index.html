@@ -22,46 +22,22 @@
     <h1>Rekomposition</h1>
     <p class="topbar-sub" id="lastMeasured">—</p>
   </div>
+  <nav class="tabs" role="tablist" aria-label="Bereiche">
+    <button class="tab" role="tab" data-page="messen" aria-selected="true" aria-controls="page-messen">Messen</button>
+    <button class="tab" role="tab" data-page="fortschritt" aria-selected="false" aria-controls="page-fortschritt">Fortschritt</button>
+    <button class="tab" role="tab" data-page="wissen" aria-selected="false" aria-controls="page-wissen">Wissen</button>
+    <button class="tab" role="tab" data-page="einstellungen" aria-selected="false" aria-controls="page-einstellungen">Einstellungen</button>
+  </nav>
 </header>
 
-<main id="app">
+<main>
 
-  <!-- ── Letzte Ablesung ───────────────────────────────── -->
-  <section class="card reading" aria-labelledby="h-reading">
-    <h2 id="h-reading" class="card-title">Letzte Ablesung</h2>
+<!-- ══ Seite 1: Messen ═══════════════════════════════════ -->
+<section class="page" id="page-messen" data-page="messen" role="tabpanel" aria-labelledby="tab-messen">
 
-    <div class="lead">
-      <div class="lead-value">
-        <span id="leadBf" class="lead-number">—</span><span class="lead-unit">%</span>
-      </div>
-      <div class="lead-meta">
-        <span class="lead-label">Körperfett</span>
-        <span id="leadBfDelta" class="delta"></span>
-      </div>
-    </div>
+  <div class="reminder" id="reminder" hidden></div>
 
-    <div class="readout" id="readout"></div>
-    <p class="note" id="readingNote"></p>
-  </section>
-
-  <!-- ── Ziele ─────────────────────────────────────────── -->
-  <section class="card" aria-labelledby="h-goals">
-    <h2 id="h-goals" class="card-title">Weg zum Ziel</h2>
-    <div id="goals" class="goals"></div>
-  </section>
-
-  <!-- ── Verlauf ───────────────────────────────────────── -->
-  <section class="card" aria-labelledby="h-chart">
-    <h2 id="h-chart" class="card-title">Verlauf</h2>
-    <div class="chips" id="metricChips" role="tablist" aria-label="Messgröße wählen"></div>
-    <div class="chart-wrap">
-      <svg id="chart" role="img" aria-label="Verlaufsdiagramm"></svg>
-      <p class="chart-empty" id="chartEmpty" hidden>Noch zu wenig Daten — trag eine zweite Messung ein, dann zeichne ich die Linie.</p>
-    </div>
-    <p class="chart-hint" id="chartHint"></p>
-  </section>
-
-  <!-- ── Neue Messung ──────────────────────────────────── -->
+  <!-- ── Neue Messung ────────────────────────────────── -->
   <section class="card" aria-labelledby="formTitle">
     <h2 id="formTitle" class="card-title">Neue Messung</h2>
     <form id="entryForm" novalidate>
@@ -86,20 +62,25 @@
           <input type="text" id="f-neck" inputmode="decimal" autocomplete="off" placeholder="z. B. 40,5">
         </label>
 
-        <label class="field">
-          <span class="field-label">Oberarm <em>cm</em></span>
-          <input type="text" id="f-arm" inputmode="decimal" autocomplete="off" placeholder="optional">
-        </label>
-
-        <label class="field">
-          <span class="field-label">Brust <em>cm</em></span>
-          <input type="text" id="f-chest" inputmode="decimal" autocomplete="off" placeholder="optional">
-        </label>
-
         <label class="field field-wide">
           <span class="field-label">Notiz</span>
           <input type="text" id="f-note" autocomplete="off" placeholder="optional">
         </label>
+      </div>
+
+      <!-- Erscheint erst mit einer Taille: Das Foto gehört zur 4-Wochen-Messung. -->
+      <div class="photo-field" id="photoField" hidden>
+        <span class="field-label">Foto <em>zur Taillenmessung</em></span>
+        <div class="photo-row">
+          <div class="photo-thumb" id="photoPreview" hidden>
+            <img id="photoPreviewImg" alt="Vorschau des gewählten Fotos">
+            <button type="button" class="photo-x" id="photoRemove" aria-label="Foto entfernen">×</button>
+          </div>
+          <button type="button" class="btn btn-photo" id="photoBtn">Foto wählen</button>
+        </div>
+        <input type="file" id="f-photo" accept="image/*" hidden>
+        <p class="note">Gleiche Pose, gleiches Licht, gleiche Uhrzeit — sonst vergleichst du Schatten statt Bauch.
+        Das Foto bleibt auf diesem Gerät und wird beim Speichern verkleinert; Aufnahmeort und Kameradaten entferne ich dabei.</p>
       </div>
 
       <div class="preview" id="preview" hidden></div>
@@ -114,72 +95,270 @@
     </form>
   </section>
 
-  <!-- ── Alle Messungen ────────────────────────────────── -->
+  <!-- ── Letzte Ablesung ─────────────────────────────── -->
+  <section class="card reading" aria-labelledby="h-reading">
+    <h2 id="h-reading" class="card-title">Letzte Ablesung</h2>
+
+    <div class="lead">
+      <div class="lead-value">
+        <span id="leadBf" class="lead-number">—</span><span class="lead-unit">%</span>
+      </div>
+      <div class="lead-meta">
+        <span class="lead-label">Körperfett <button type="button" class="help" data-goto="wissen-kf" aria-label="Was bedeutet dieser Wert?">?</button></span>
+        <span id="leadBfDelta" class="delta"></span>
+      </div>
+    </div>
+
+    <div class="readout" id="readout"></div>
+    <p class="note" id="readingNote"></p>
+  </section>
+
+  <!-- ── Alle Messungen ──────────────────────────────── -->
   <section class="card" aria-labelledby="h-ledger">
     <h2 id="h-ledger" class="card-title">Alle Messungen <span class="count" id="entryCount"></span></h2>
     <div id="ledger" class="ledger"></div>
   </section>
 
-  <!-- ── Einstellungen ─────────────────────────────────── -->
-  <section class="card">
-    <details id="settings">
-      <summary class="card-title summary">Einstellungen &amp; Daten</summary>
+</section>
 
-      <div class="settings-body">
-        <h3 class="sub-title">Körpermaße</h3>
-        <div class="field-grid">
-          <label class="field">
-            <span class="field-label">Größe <em>cm</em></span>
-            <input type="text" id="s-height" inputmode="decimal" autocomplete="off">
-          </label>
-        </div>
+<!-- ══ Seite 2: Fortschritt ══════════════════════════════ -->
+<section class="page" id="page-fortschritt" data-page="fortschritt" role="tabpanel" aria-labelledby="tab-fortschritt" hidden>
 
-        <h3 class="sub-title">Zielwerte</h3>
-        <div class="field-grid">
-          <label class="field">
-            <span class="field-label">Taille Etappe <em>cm</em></span>
-            <input type="text" id="s-waistFirst" inputmode="decimal" autocomplete="off">
-          </label>
-          <label class="field">
-            <span class="field-label">Taille Ziel <em>cm</em></span>
-            <input type="text" id="s-waistLong" inputmode="decimal" autocomplete="off">
-          </label>
-          <label class="field">
-            <span class="field-label">Körperfett von <em>%</em></span>
-            <input type="text" id="s-bfLow" inputmode="decimal" autocomplete="off">
-          </label>
-          <label class="field">
-            <span class="field-label">Körperfett bis <em>%</em></span>
-            <input type="text" id="s-bfHigh" inputmode="decimal" autocomplete="off">
-          </label>
-        </div>
-        <p class="note" id="targetWeightNote"></p>
-
-        <h3 class="sub-title">Daten sichern</h3>
-        <p class="note">Deine Messungen liegen ausschließlich auf diesem Gerät. Es gibt keine Cloud —
-        exportiere regelmäßig eine CSV, sonst sind die Daten beim Handywechsel oder beim Leeren der
-        Browserdaten weg.</p>
-        <div class="form-actions">
-          <button type="button" class="btn" id="exportBtn">CSV exportieren</button>
-          <button type="button" class="btn" id="importBtn">CSV importieren</button>
-          <input type="file" id="importFile" accept=".csv,text/csv" hidden>
-        </div>
-        <p class="status" id="dataStatus" hidden></p>
-
-        <h3 class="sub-title">Zurücksetzen</h3>
-        <div class="form-actions">
-          <button type="button" class="btn btn-danger" id="resetBtn">Alle Daten löschen</button>
-        </div>
-      </div>
-    </details>
+  <section class="card" aria-labelledby="h-goals">
+    <h2 id="h-goals" class="card-title">Weg zum Ziel</h2>
+    <div id="goals" class="goals"></div>
   </section>
 
-  <footer class="foot">
-    <p>Körperfett nach der Navy-Methode aus Hals, Taille und Größe — Unschärfe rund ±3 Prozentpunkte.
-    Nur der Trend zählt, nicht der einzelne Absolutwert.</p>
-  </footer>
+  <section class="card" aria-labelledby="h-chart">
+    <h2 id="h-chart" class="card-title">Verlauf</h2>
+    <div class="chips" id="metricChips" role="tablist" aria-label="Messgröße wählen"></div>
+    <div class="chart-wrap">
+      <svg id="chart" role="img" aria-label="Verlaufsdiagramm"></svg>
+      <p class="chart-empty" id="chartEmpty" hidden></p>
+    </div>
+    <p class="chart-hint" id="chartHint"></p>
+  </section>
+
+</section>
+
+<!-- ══ Seite 3: Wissen ═══════════════════════════════════ -->
+<section class="page" id="page-wissen" data-page="wissen" role="tabpanel" aria-labelledby="tab-wissen" hidden>
+
+  <!-- ── Körperfettanteil ────────────────────────────── -->
+  <section class="card" id="wissen-kf" aria-labelledby="h-kf">
+    <h2 id="h-kf" class="card-title">Wie viel Körperfett ist gut?</h2>
+
+    <p class="prose">Der Körperfettanteil sagt, welcher Anteil deines Gewichts aus Fett besteht — und
+    beantwortet damit die Frage, die die Waage offenlässt. Zwei Männer mit 95 kg können völlig
+    unterschiedlich aussehen und unterschiedlich gesund sein, je nachdem, ob die Kilos aus Muskeln
+    oder aus Fett bestehen.</p>
+
+    <p class="prose">Fett ist dabei nichts Schlechtes: Ein Teil davon ist lebensnotwendig. Es geht
+    nicht um möglichst wenig, sondern um einen sinnvollen Bereich.</p>
+
+    <div class="table-wrap">
+      <table class="ref">
+        <caption>Richtwerte für Männer</caption>
+        <thead>
+          <tr><th>Bereich</th><th>Anteil</th><th>Was das bedeutet</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Essentiell</td><td class="num">2–5 %</td><td>Das absolute Minimum zum Überleben. Darunter versagen Hormonhaushalt und Organe.</td></tr>
+          <tr><td>Athleten</td><td class="num">6–13 %</td><td>Wettkampfform. Sichtbare Bauchmuskeln fangen bei etwa 10–12 % an. Auf Dauer schwer zu halten.</td></tr>
+          <tr class="zone"><td>Fit, schlank</td><td class="num">14–17 %</td><td>Sportlich und sichtbar definiert, ohne dass das ganze Leben ums Essen kreist.</td></tr>
+          <tr class="zone"><td>Durchschnitt</td><td class="num">18–24 %</td><td>Gesundheitlich meist unauffällig, aber ohne sichtbare Definition.</td></tr>
+          <tr><td>Erhöht</td><td class="num">ab 25 %</td><td>Ab hier steigt das Risiko für Herz-Kreislauf-Erkrankungen und Diabetes messbar.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p class="note">Die Zeilen 14–24 % sind hervorgehoben, weil dort die realistische Reise für die
+    meisten liegt. Für Frauen gelten andere Zahlen: Alle Bereiche liegen dort rund 8–10 Prozentpunkte
+    höher, weil der essentielle Fettanteil biologisch größer ist.</p>
+
+    <h3 class="sub-title">Warum die Taille so viel verrät</h3>
+
+    <p class="prose">Nicht jedes Fett ist gleich riskant. Entscheidend ist das <b>viszerale Fett</b> —
+    das Fett zwischen den Organen im Bauchraum. Es ist stoffwechselaktiv und schüttet Botenstoffe aus,
+    die Entzündungen und Insulinresistenz fördern. Unterhautfett an Beinen oder Gesäß tut das kaum.</p>
+
+    <p class="prose">Genau deshalb ist der Taillenumfang so nützlich: Er misst ziemlich direkt das
+    Fett, auf das es ankommt. Und er hat einen unschlagbaren Vorteil gegenüber der Waage — Muskeln
+    und eingelagertes Wasser machen den Bauch nicht breiter, Fett schon.</p>
+
+    <div class="table-wrap">
+      <table class="ref">
+        <caption>Taillenumfang bei Männern</caption>
+        <thead><tr><th>Umfang</th><th>Einordnung</th></tr></thead>
+        <tbody>
+          <tr><td class="num">unter 94 cm</td><td>unauffällig</td></tr>
+          <tr><td class="num">94–102 cm</td><td>erhöhtes Risiko</td></tr>
+          <tr><td class="num">über 102 cm</td><td>deutlich erhöhtes Risiko</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p class="prose">Noch besser als der reine Umfang ist das Verhältnis zur Körpergröße
+    (<b>Taille ÷ Größe</b>). Es sollte <b>unter 0,50</b> liegen. Die Faustregel dazu ist angenehm
+    einfach: <b>Die Taille sollte schmaler sein als die halbe Körpergröße.</b> Bei 180 cm sind das
+    also 90 cm. Diese Regel funktioniert unabhängig von Statur und Alter besser als der BMI.</p>
+
+    <h3 class="sub-title">Warum kein Zielgewicht?</h3>
+
+    <p class="prose">Weil es in die Irre führt, sobald jemand ordentlich Muskeln trägt. Der BMI kennt
+    nur Größe und Gewicht und stuft muskulöse Menschen fälschlich als übergewichtig ein. Sinnvoller
+    ist die Rechnung andersherum: Wenn du deine Magermasse hältst und nur Fett verlierst, ergibt sich
+    dein Zielgewicht von selbst aus dem angepeilten Körperfettanteil. Genau das rechnet dir diese App
+    unter <i>Einstellungen</i> vor.</p>
+
+    <p class="disclaimer">Das sind Orientierungswerte aus der Sportwissenschaft, keine medizinische
+    Beratung. Bei Vorerkrankungen oder wenn dich etwas beunruhigt, ist eine Ärztin die richtige
+    Adresse — nicht diese App.</p>
+  </section>
+
+  <!-- ── Navy-Methode ────────────────────────────────── -->
+  <section class="card" id="wissen-navy" aria-labelledby="h-navy">
+    <h2 id="h-navy" class="card-title">Die Navy-Methode</h2>
+
+    <p class="prose">Den Körperfettanteil wirklich zu <i>messen</i> ist aufwendig: Man braucht ein
+    DEXA-Gerät oder ein Unterwasserbecken. Die US-Marine stand in den 1980ern vor dem Problem, das für
+    Zehntausende Rekruten regelmäßig tun zu müssen — und suchte etwas, das mit einem Maßband
+    funktioniert.</p>
+
+    <p class="prose">Das Ergebnis entwickelten <b>Hodgdon und Beckett</b> 1984 am Naval Health
+    Research Center: eine Formel, die aus Körperumfängen auf den Fettanteil schließt. Sie ist bis
+    heute in Gebrauch und steckt in praktisch jedem Körperfett-Rechner im Netz.</p>
+
+    <h3 class="sub-title">Die Idee dahinter</h3>
+
+    <p class="prose">Die Formel nutzt einen simplen Trick: Sie vergleicht eine Stelle, an der sich
+    kaum Fett sammelt, mit einer, an der es sich bevorzugt sammelt. Der <b>Hals</b> dient als
+    schlanke Referenz — er bleibt über Jahre praktisch gleich. Die <b>Taille</b> trägt das Fett.
+    Der Abstand zwischen beiden ist also das eigentliche Signal, und die <b>Körpergröße</b> setzt
+    das Ganze ins Verhältnis. Deshalb reichen drei Zahlen.</p>
+
+    <div class="formula">
+      <span class="formula-label">Für Männer, alle Maße in cm</span>
+      <code>KF % = 495 ÷ (1,0324 − 0,19077 × log₁₀(Taille − Hals) + 0,15456 × log₁₀(Größe)) − 450</code>
+    </div>
+
+    <p class="note">Für Frauen gibt es eine eigene Variante, die zusätzlich den Hüftumfang braucht.
+    Diese App rechnet nur mit der Männer-Formel.</p>
+
+    <h3 class="sub-title">Wie genau ist das?</h3>
+
+    <p class="prose">Ehrlich gesagt: ordentlich, aber nicht präzise. Gegenüber einer DEXA-Messung
+    liegt die Abweichung bei etwa <b>±3 Prozentpunkten</b>. Zeigt dir die App also 23 %, liegt dein
+    echter Wert irgendwo zwischen 20 und 26 %. Das klingt nach viel — ist für deinen Zweck aber
+    kaum relevant.</p>
+
+    <p class="prose">Denn der Fehler ist <b>systematisch, nicht zufällig</b>. Die Formel liegt bei dir
+    immer in dieselbe Richtung daneben. Wenn dein Wert von 23 auf 21 % fällt, hast du wirklich Fett
+    verloren — selbst wenn beide Zahlen absolut betrachtet um zwei Punkte danebenliegen. <b>Genau
+    darum zählt der Trend und nicht der Einzelwert.</b></p>
+
+    <h3 class="sub-title">Wo sie schwächelt</h3>
+
+    <ul class="prose-list">
+      <li><b>Sie kennt deine Bauform nicht.</b> Zwei Männer mit identischen Maßen bekommen dasselbe
+      Ergebnis, auch wenn ihr Fett völlig anders verteilt ist.</li>
+      <li><b>Ein kräftiger Hals trickst sie aus.</b> Wer viel Nackenmuskulatur hat, bekommt einen
+      kleineren Abstand zur Taille — und damit einen zu niedrigen Wert.</li>
+      <li><b>Messfehler schlagen durch.</b> Ein Zentimeter Taille mehr macht in dieser Formel gut
+      einen halben Prozentpunkt aus. Das Maßband nicht straff ziehen, immer auf Nabelhöhe, immer
+      entspannt ausgeatmet, immer morgens.</li>
+    </ul>
+
+    <p class="prose">Die praktische Konsequenz ist angenehm entspannt: <b>Miss immer gleich, dann
+    darfst du der Richtung trauen.</b> Und miss nicht zu oft — Gewicht wöchentlich, Taille alle
+    2–4 Wochen. Häufiger erzeugt nur Rauschen und Frust.</p>
+
+    <p class="note">Zu Körperfett-Waagen mit Bioimpedanz: Die sind bequem, aber für den Absolutwert
+    noch ungenauer als das Maßband, weil sie stark vom Wasserhaushalt abhängen. Wenn überhaupt, dann
+    auch dort nur den Trend bei immer gleichen Bedingungen ansehen.</p>
+  </section>
+
+</section>
+
+<!-- ══ Seite 4: Einstellungen ════════════════════════════ -->
+<section class="page" id="page-einstellungen" data-page="einstellungen" role="tabpanel" aria-labelledby="tab-einstellungen" hidden>
+
+  <section class="card" aria-labelledby="h-settings">
+    <h2 id="h-settings" class="card-title">Einstellungen &amp; Daten</h2>
+
+    <h3 class="sub-title">Körpermaße</h3>
+    <div class="field-grid">
+      <label class="field">
+        <span class="field-label">Größe <em>cm</em></span>
+        <input type="text" id="s-height" inputmode="decimal" autocomplete="off">
+      </label>
+    </div>
+
+    <h3 class="sub-title">Zielwerte</h3>
+    <div class="field-grid">
+      <label class="field">
+        <span class="field-label">Taille Etappe <em>cm</em></span>
+        <input type="text" id="s-waistFirst" inputmode="decimal" autocomplete="off">
+      </label>
+      <label class="field">
+        <span class="field-label">Taille Ziel <em>cm</em></span>
+        <input type="text" id="s-waistLong" inputmode="decimal" autocomplete="off">
+      </label>
+      <label class="field">
+        <span class="field-label">Körperfett von <em>%</em></span>
+        <input type="text" id="s-bfLow" inputmode="decimal" autocomplete="off">
+      </label>
+      <label class="field">
+        <span class="field-label">Körperfett bis <em>%</em></span>
+        <input type="text" id="s-bfHigh" inputmode="decimal" autocomplete="off">
+      </label>
+    </div>
+    <p class="note" id="targetWeightNote"></p>
+
+    <h3 class="sub-title">Daten sichern</h3>
+    <p class="note">Deine Messungen liegen ausschließlich auf diesem Gerät. Es gibt keine Cloud —
+    exportiere regelmäßig eine CSV, sonst sind die Daten beim Handywechsel oder beim Leeren der
+    Browserdaten weg.</p>
+    <div class="form-actions">
+      <button type="button" class="btn" id="exportBtn">CSV exportieren</button>
+      <button type="button" class="btn" id="importBtn">CSV importieren</button>
+      <input type="file" id="importFile" accept=".csv,text/csv" hidden>
+    </div>
+    <p class="warn" id="photoWarn">Achtung: Die CSV enthält nur Messwerte, <b>keine Fotos</b>. Bilder
+    passen nicht in eine Textdatei. Sichere sie einzeln über den Herunterladen-Knopf in der
+    Fotoansicht.</p>
+    <p class="status" id="dataStatus" hidden></p>
+
+    <h3 class="sub-title">Speicherplatz</h3>
+    <p class="note" id="storageNote">—</p>
+
+    <h3 class="sub-title">Zurücksetzen</h3>
+    <div class="form-actions">
+      <button type="button" class="btn btn-danger" id="resetBtn">Alle Daten löschen</button>
+    </div>
+  </section>
+
+</section>
 
 </main>
+
+<footer class="foot">
+  <p>Körperfett nach der Navy-Methode aus Hals, Taille und Größe — Unschärfe rund ±3 Prozentpunkte.
+  Nur der Trend zählt, nicht der einzelne Absolutwert.</p>
+</footer>
+
+<!-- ── Fotoansicht ───────────────────────────────────── -->
+<div class="lightbox" id="lightbox" hidden role="dialog" aria-modal="true" aria-label="Foto">
+  <div class="lightbox-bar">
+    <span class="lightbox-date" id="lightboxDate"></span>
+    <div class="lightbox-acts">
+      <button type="button" class="icon-btn" id="lightboxDownload">Herunterladen</button>
+      <button type="button" class="icon-btn del" id="lightboxDelete">Löschen</button>
+      <button type="button" class="icon-btn" id="lightboxClose" aria-label="Schließen">Schließen</button>
+    </div>
+  </div>
+  <img id="lightboxImg" alt="">
+</div>
 
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
