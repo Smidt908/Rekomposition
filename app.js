@@ -6,6 +6,7 @@
 'use strict';
 
 const STORE_KEY = 'rekomposition.v1';
+const BACKUP_KEY = 'rekomposition.v1.beschaedigt';
 
 // Bewusst ohne persönliche Werte: Diese Dateien liegen öffentlich beim Hoster.
 // Körpergröße und Zielwerte stellst du in der App unter "Einstellungen & Daten"
@@ -46,7 +47,10 @@ const HINTS = {
 
 /* ── Zustand ───────────────────────────────────────────── */
 
-let state = load();
+// state wird erst in init() geladen, nicht hier. Ein Aufruf an dieser Stelle
+// läuft, bevor die const-Hilfsfunktionen weiter unten initialisiert sind, und
+// scheitert mit "Cannot access 'isDate' before initialization".
+let state;
 let metric = 'bf';
 let editingId = null;
 let installEvent = null;
@@ -54,22 +58,31 @@ let installEvent = null;
 /* ── Speicher ──────────────────────────────────────────── */
 
 function load() {
+  const raw = localStorage.getItem(STORE_KEY);
+  if (!raw) return structuredClone(DEFAULTS);
+
+  let parsed;
   try {
-    const raw = localStorage.getItem(STORE_KEY);
-    if (!raw) return structuredClone(DEFAULTS);
-    const parsed = JSON.parse(raw);
-    return {
-      version: 1,
-      settings: {
-        heightCm: num(parsed?.settings?.heightCm) ?? DEFAULTS.settings.heightCm,
-        targets: { ...DEFAULTS.settings.targets, ...(parsed?.settings?.targets || {}) }
-      },
-      entries: Array.isArray(parsed?.entries) ? parsed.entries.map(cleanEntry).filter(Boolean) : []
-    };
+    parsed = JSON.parse(raw);
   } catch (err) {
-    console.error('Gespeicherte Daten unlesbar, starte mit Vorgabe.', err);
+    // Bewusst nur um JSON.parse herum: Fängt man hier alles ab, verschluckt
+    // der Block auch Programmierfehler, macht mit leeren Vorgaben weiter und
+    // der nächste save() überschreibt die vorhandenen Messungen. Genau so
+    // gingen schon einmal Daten verloren. Programmierfehler sollen deshalb
+    // laut scheitern; kaputte Daten werden vor dem Verwerfen gesichert.
+    console.error('Gespeicherte Daten unlesbar, Sicherung angelegt.', err);
+    try { localStorage.setItem(BACKUP_KEY, raw); } catch (e) { /* Speicher voll */ }
     return structuredClone(DEFAULTS);
   }
+
+  return {
+    version: 1,
+    settings: {
+      heightCm: num(parsed?.settings?.heightCm) ?? DEFAULTS.settings.heightCm,
+      targets: { ...DEFAULTS.settings.targets, ...(parsed?.settings?.targets || {}) }
+    },
+    entries: Array.isArray(parsed?.entries) ? parsed.entries.map(cleanEntry).filter(Boolean) : []
+  };
 }
 
 function save() {
@@ -885,6 +898,7 @@ function wireInstall() {
 /* ── Start ─────────────────────────────────────────────── */
 
 async function init() {
+  state = load();
   wire();
   wireInstall();
   resetForm();
@@ -894,6 +908,17 @@ async function init() {
   // durch sein, während weiter unten auf persist() gewartet wird — der
   // Zuhörer käme dann nie mehr zum Zug und die App wäre nicht installierbar.
   if ('serviceWorker' in navigator) {
+    // Übernimmt eine neue Fassung, einmalig neu laden — sonst läuft die alte
+    // aus dem Cache weiter, bis die App zweimal geschlossen und geöffnet wurde.
+    // Bei der Erstinstallation gibt es noch keinen Vorgänger, da wäre der
+    // Neustart überflüssig.
+    const hatteVorgaenger = !!navigator.serviceWorker.controller;
+    let laedtNeu = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (!hatteVorgaenger || laedtNeu) return;
+      laedtNeu = true;
+      location.reload();
+    });
     navigator.serviceWorker.register('./sw.js')
       .catch(err => console.warn('Service Worker nicht registriert:', err));
   }

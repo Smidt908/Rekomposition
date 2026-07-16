@@ -7,7 +7,7 @@
    Dateien.
    ────────────────────────────────────────────────────── */
 
-const CACHE = 'rekomposition-v1';
+const CACHE = 'rekomposition-v2';
 
 const SHELL = [
   './',
