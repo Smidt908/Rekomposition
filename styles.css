@@ -235,6 +235,15 @@ body::before {
   color: var(--tinte-leise);
 }
 
+.sicherung-stand {
+  margin: 2px 0 4px;
+  font-size: .73rem;
+  line-height: 1.4;
+  color: var(--tinte-leise);
+  transition: color .2s;
+}
+.sicherung-stand--frisch { color: var(--rot); font-weight: 600; }
+
 /* ── Hauptbereich ───────────────────────────────────── */
 
 .haupt { flex: 1; min-width: 0; }

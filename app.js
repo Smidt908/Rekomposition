@@ -1557,6 +1557,7 @@ function listeZeichnen() {
   const garNichts = stand.rezepte.length === 0;
   $('#leer-hinweis').hidden = !garNichts;
   mahnungZeichnen();
+  sicherungStandZeichnen();
 
   if (!liste.length && !garNichts) {
     const nichts = el('p', 'beischrift', stand.suche
@@ -2272,6 +2273,33 @@ function letzteSicherung() {
 function sicherungBuchen() {
   try { localStorage.setItem(SICHERUNG_FACH, JSON.stringify({ zeit: Date.now() })); } catch { /* egal */ }
   mahnungZeichnen();
+  sicherungStandZeichnen();
+}
+
+/** Wie lange ist die letzte Sicherung her, in Worten. */
+function sicherungAlterText() {
+  const s = letzteSicherung();
+  if (!s) return 'Noch nie gesichert';
+  const min = Math.floor((Date.now() - s.zeit) / 60000);
+  if (min < 1) return 'Gerade eben gesichert';
+  if (min < 60) return 'Zuletzt gesichert vor ' + min + (min === 1 ? ' Minute' : ' Minuten');
+  const std = Math.floor(min / 60);
+  if (std < 24) return 'Zuletzt gesichert vor ' + std + (std === 1 ? ' Stunde' : ' Stunden');
+  const tage = Math.floor(std / 24);
+  if (tage === 1) return 'Zuletzt gesichert gestern';
+  return 'Zuletzt gesichert vor ' + tage + ' Tagen';
+}
+
+/** Dauerhafte Zeile in der Leiste — anders als die Erinnerung immer sichtbar. */
+function sicherungStandZeichnen() {
+  const knoten = $('#sicherung-stand');
+  if (!knoten) return;
+  const offen = ungesichertZahl();
+  let text = sicherungAlterText();
+  if (letzteSicherung() && offen > 0) {
+    text += ' · ' + offen + (offen === 1 ? ' Rezept seither neu' : ' Rezepte seither neu');
+  }
+  knoten.textContent = text;
 }
 
 /** Wie viele Rezepte haben sich seit der letzten Sicherung geändert? */
@@ -2341,20 +2369,29 @@ async function sicherungSpeichern() {
   const blob = new Blob([JSON.stringify(paket)], { type: 'application/json' });
   const heute = new Date().toISOString().slice(0, 10);
   const name = 'muemmelkueche-' + heute + '.json';
-
-  // Auf dem Handy führt der Teilen-Dialog die Datei mit einem Tipp nach
-  // Google Drive oder in eine Mail — dort liegt sie sicherer als im
-  // Download-Ordner desselben Geräts, das kaputtgehen kann.
   const datei = new File([blob], name, { type: 'application/json' });
-  if (navigator.canShare && navigator.canShare({ files: [datei] })) {
+
+  // Nur auf Touch-Geräten den Teilen-Dialog: Dort führt er die Datei mit einem
+  // Tipp nach Google Drive oder in eine Mail — sicherer als der Download-Ordner
+  // desselben Geräts. Am Rechner öffnet canShare inzwischen ebenfalls einen
+  // Teilen-Dialog (Windows), aber dort erwartet man einen simplen Download;
+  // bricht man den fremden Dialog ab, wäre nichts gesichert. Also am Rechner
+  // gar nicht erst teilen.
+  const istBeruehrung = matchMedia('(pointer: coarse)').matches;
+  if (istBeruehrung && navigator.canShare && navigator.canShare({ files: [datei] })) {
     try {
       await navigator.share({ files: [datei], title: 'Mones Mümmelküche — Sicherung' });
       sicherungBuchen();
+      sicherungRueckmeldung('Sicherung geteilt ✓');
       return;
     } catch (fehler) {
-      // Abgebrochen heißt: nicht gesichert. Nicht als erledigt verbuchen.
-      if (fehler && fehler.name === 'AbortError') return;
-      // Alles andere: normal herunterladen.
+      // Abgebrochen heißt: nicht gesichert. Ehrlich sagen, warum die
+      // Erinnerung bleibt — statt sie still hängen zu lassen.
+      if (fehler && fehler.name === 'AbortError') {
+        sicherungRueckmeldung('Abgebrochen — nicht gesichert.');
+        return;
+      }
+      // Alles andere: auf den Download zurückfallen.
     }
   }
 
@@ -2365,6 +2402,20 @@ async function sicherungSpeichern() {
   link.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
   sicherungBuchen();
+  sicherungRueckmeldung('Gesichert ✓ Die Datei liegt in den Downloads.');
+}
+
+/** Kurze sichtbare Rückmeldung in der Leiste, damit sich sichtbar etwas tut. */
+function sicherungRueckmeldung(text) {
+  const knoten = $('#sicherung-stand');
+  if (!knoten) return;
+  knoten.textContent = text;
+  knoten.classList.add('sicherung-stand--frisch');
+  clearTimeout(sicherungRueckmeldung._uhr);
+  sicherungRueckmeldung._uhr = setTimeout(() => {
+    knoten.classList.remove('sicherung-stand--frisch');
+    sicherungStandZeichnen();
+  }, 4000);
 }
 
 async function sicherungLaden(datei) {
