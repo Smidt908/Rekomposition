@@ -1,25 +1,15 @@
 /* ── Service Worker ─────────────────────────────────────
-   Macht die Mümmelküche offline nutzbar und erfüllt
-   Chromes Bedingung für eine echte Installation auf
-   Android.
+   Macht die App offline nutzbar und erfüllt Chromes
+   Bedingung für eine echte Installation auf Android.
 
-   Beim Ausrollen einer neuen Fassung die Zahl in CACHE
+   Beim Ausrollen einer neuen Version die Zahl in CACHE
    erhöhen — sonst behalten installierte Geräte die alten
    Dateien.
-
-   Die Texterkennung im Ordner ./ocr steht bewusst nicht im
-   SCHRANK: gut 10 MB gleich beim Einrichten wären zu viel.
-   Sie wandert beim ersten Benutzen von selbst in den Cache
-   (siehe unten) und ist danach auch offline da.
-
-   Fremde Adressen (Rezeptseiten beim Link-Import) fasst der
-   Service Worker gar nicht an: die sollen immer frisch und
-   unverfälscht durchs Netz gehen.
    ────────────────────────────────────────────────────── */
 
-const CACHE = 'muemmelkueche-v5';
+const CACHE = 'rekomposition-v3';
 
-const SCHRANK = [
+const SHELL = [
   './',
   './index.html',
   './styles.css',
@@ -30,72 +20,54 @@ const SCHRANK = [
   './icons/icon-maskable-512.png'
 ];
 
-self.addEventListener('install', ereignis => {
-  ereignis.waitUntil(
+self.addEventListener('install', event => {
+  event.waitUntil(
     caches.open(CACHE)
-      .then(schrank => schrank.addAll(SCHRANK))
+      .then(cache => cache.addAll(SHELL))
       .then(() => self.skipWaiting())
   );
 });
 
-self.addEventListener('activate', ereignis => {
-  ereignis.waitUntil(
+self.addEventListener('activate', event => {
+  event.waitUntil(
     caches.keys()
-      .then(namen => Promise.all(namen.filter(n => n !== CACHE).map(n => caches.delete(n))))
+      .then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
       .then(() => self.clients.claim())
   );
 });
 
-self.addEventListener('fetch', ereignis => {
-  const anfrage = ereignis.request;
-  if (anfrage.method !== 'GET') return;
-  if (new URL(anfrage.url).origin !== self.location.origin) return;
+self.addEventListener('fetch', event => {
+  const { request } = event;
+  if (request.method !== 'GET') return;
+  if (new URL(request.url).origin !== self.location.origin) return;
 
-  // Seitenaufrufe: erst das Netz (damit Neues ankommt), im Funkloch aus dem Schrank.
-  // Wichtig: gecacht wird immer unter './index.html', damit ein geteilter Link
-  // mit ?url=… nicht als eigene Seite im Schrank landet.
-  if (anfrage.mode === 'navigate') {
-    ereignis.respondWith(
-      fetch(anfrage)
-        .then(antwort => {
-          const kopie = antwort.clone();
-          caches.open(CACHE).then(schrank => schrank.put('./index.html', kopie));
-          return antwort;
+  // Seitenaufrufe: erst Netz (für Updates), bei Funkloch aus dem Cache.
+  if (request.mode === 'navigate') {
+    event.respondWith(
+      fetch(request)
+        .then(res => {
+          const copy = res.clone();
+          caches.open(CACHE).then(c => c.put('./index.html', copy));
+          return res;
         })
-        .catch(() => caches.match('./index.html').then(a => a || caches.match('./')))
+        .catch(() => caches.match('./index.html').then(r => r || caches.match('./')))
     );
     return;
   }
 
-  // Die Texterkennung (gut 10 MB) ändert sich nie: einmal im Schrank, danach
-  // nie wieder nachfragen. Mit dem Auffrischen unten würde sonst jedes Foto
-  // die Dateien erneut über die Mobilfunkrechnung ziehen.
-  if (new URL(anfrage.url).pathname.includes('/ocr/')) {
-    ereignis.respondWith(
-      caches.match(anfrage).then(gelagert => gelagert || fetch(anfrage).then(antwort => {
-        if (antwort && antwort.ok) {
-          const kopie = antwort.clone();
-          caches.open(CACHE).then(schrank => schrank.put(anfrage, kopie));
-        }
-        return antwort;
-      }))
-    );
-    return;
-  }
-
-  // Bausteine: sofort aus dem Schrank, im Hintergrund auffrischen.
-  ereignis.respondWith(
-    caches.match(anfrage).then(gelagert => {
-      const ausDemNetz = fetch(anfrage)
-        .then(antwort => {
-          if (antwort && antwort.ok) {
-            const kopie = antwort.clone();
-            caches.open(CACHE).then(schrank => schrank.put(anfrage, kopie));
+  // Bausteine: sofort aus dem Cache, im Hintergrund auffrischen.
+  event.respondWith(
+    caches.match(request).then(cached => {
+      const network = fetch(request)
+        .then(res => {
+          if (res && res.ok) {
+            const copy = res.clone();
+            caches.open(CACHE).then(c => c.put(request, copy));
           }
-          return antwort;
+          return res;
         })
-        .catch(() => gelagert);
-      return gelagert || ausDemNetz;
+        .catch(() => cached);
+      return cached || network;
     })
   );
 });

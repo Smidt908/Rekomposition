@@ -3,284 +3,364 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Mones Mümmelküche</title>
-<meta name="description" content="Das Kochbuch von Mone: Rezepte sammeln, sortieren, bewerten und auf die richtige Portionszahl umrechnen.">
-<meta name="theme-color" content="#c8102e">
+<title>Rekomposition</title>
+<meta name="description" content="Körperrekomposition messen: Gewicht, Taille, Körperfett nach Navy-Methode.">
 <link rel="manifest" href="./manifest.webmanifest">
-<link rel="icon" href="./icons/icon-192.png">
-<link rel="apple-touch-icon" href="./icons/icon-192.png">
+<meta name="theme-color" content="#faf7f2" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#17161a" media="(prefers-color-scheme: dark)">
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="Mümmelküche">
+<meta name="apple-mobile-web-app-title" content="Rekomposition">
+<link rel="apple-touch-icon" href="./icons/icon-192.png">
+<link rel="icon" href="./icons/icon-192.png">
 <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
 
-<!-- ── Kopfzeile ───────────────────────────────────────── -->
-<header class="kopf">
-  <button class="kopf__knopf" id="knopf-leiste" aria-label="Kategorien anzeigen" aria-expanded="false" aria-controls="leiste">
-    <span class="burger" aria-hidden="true"></span>
-  </button>
-
-  <div class="kopf__mitte">
-    <h1 class="kopf__titel">Mones Mümmelküche</h1>
-    <p class="kopf__unterzeile">Gekocht wird, was schmeckt</p>
+<header class="topbar">
+  <div class="topbar-inner">
+    <h1>Rekomposition</h1>
+    <p class="topbar-sub" id="lastMeasured">—</p>
   </div>
-
-  <button class="kopf__knopf kopf__knopf--neu" id="knopf-neu" aria-label="Neues Rezept aufnehmen">
-    <span aria-hidden="true">+</span>
-  </button>
+  <nav class="tabs" role="tablist" aria-label="Bereiche">
+    <button class="tab" role="tab" data-page="messen" aria-selected="true" aria-controls="page-messen">Messen</button>
+    <button class="tab" role="tab" data-page="fortschritt" aria-selected="false" aria-controls="page-fortschritt">Fortschritt</button>
+    <button class="tab" role="tab" data-page="wissen" aria-selected="false" aria-controls="page-wissen">Wissen</button>
+    <button class="tab" role="tab" data-page="einstellungen" aria-selected="false" aria-controls="page-einstellungen">Einstellungen</button>
+  </nav>
 </header>
 
-<div class="buehne">
+<main>
 
-  <!-- ── Kategorien-Leiste ─────────────────────────────── -->
-  <div class="schleier" id="schleier" hidden></div>
+<!-- ══ Seite 1: Messen ═══════════════════════════════════ -->
+<section class="page" id="page-messen" data-page="messen" role="tabpanel" aria-labelledby="tab-messen">
 
-  <aside class="leiste" id="leiste">
-    <div class="leiste__suche">
-      <input type="search" id="suche" placeholder="Rezept suchen …" aria-label="Rezept suchen" autocomplete="off">
-    </div>
+  <div class="reminder" id="reminder" hidden></div>
 
-    <nav class="leiste__nav" id="kategorien" aria-label="Kategorien"></nav>
-
-    <div class="leiste__fuss">
-      <p class="leiste__hinweis" id="speicher-hinweis"></p>
-      <button class="knopf knopf--leise" id="knopf-export">Sicherung speichern</button>
-      <p class="sicherung-stand" id="sicherung-stand"></p>
-      <button class="knopf knopf--leise" id="knopf-import">Sicherung laden</button>
-      <button class="knopf knopf--leise" id="knopf-einstellungen">Einstellungen</button>
-      <input type="file" id="datei-sicherung" accept="application/json,.json" hidden>
-    </div>
-  </aside>
-
-  <!-- ── Hauptbereich ──────────────────────────────────── -->
-  <main class="haupt" id="haupt">
-
-    <!-- Ansicht: Rezeptliste -->
-    <section class="ansicht ansicht--an" id="ansicht-liste" aria-label="Rezeptliste">
-
-      <!-- Erinnerung an die Sicherung. Ein Browser darf nicht von allein
-           Dateien schreiben — deshalb erinnert die App, statt es zu tun. -->
-      <div class="mahnung" id="mahnung" hidden>
-        <span class="mahnung__bild" aria-hidden="true">🧺</span>
-        <div class="mahnung__text">
-          <strong id="mahnung-titel"></strong>
-          <span id="mahnung-satz"></span>
-        </div>
-        <div class="mahnung__knoepfe">
-          <button class="knopf" id="mahnung-sichern">Jetzt sichern</button>
-          <button class="mahnung__weg" id="mahnung-weg" aria-label="Hinweis ausblenden">Später</button>
-        </div>
-      </div>
-
-      <div class="karte karte--kopf">
-        <h2 class="ueberschrift" id="listen-titel">Alle Rezepte</h2>
-        <p class="beischrift" id="listen-zahl"></p>
-      </div>
-      <div class="raster" id="raster"></div>
-      <div class="leer" id="leer-hinweis" hidden>
-        <p class="leer__gross">Noch kein Rezept da.</p>
-        <p>Tippe oben rechts auf <strong>+</strong> und nimm das erste auf —
-           per Foto, per Link oder von Hand.</p>
-      </div>
-    </section>
-
-    <!-- Ansicht: Rezept ansehen -->
-    <section class="ansicht" id="ansicht-rezept" aria-label="Rezept" hidden></section>
-
-    <!-- Ansicht: Neues Rezept aufnehmen -->
-    <section class="ansicht" id="ansicht-neu" aria-label="Neues Rezept" hidden>
-      <div class="karte">
-        <button class="zurueck" data-zurueck>← Zurück</button>
-        <h2 class="ueberschrift">Neues Rezept aufnehmen</h2>
-        <p class="beischrift">Such dir aus, wie du das Rezept in die Küche holst.</p>
-
-        <div class="wege">
-          <button class="weg" id="weg-foto">
-            <span class="weg__bild" aria-hidden="true">📷</span>
-            <span class="weg__titel">Fotos oder Screenshots</span>
-            <span class="weg__text">Aus dem Kochbuch abfotografieren oder Screenshots auswählen.
-              <strong>Mehrere Bilder gehen</strong> — sie werden zu einem Rezept zusammengesetzt.</span>
-            <span class="weg__marke" id="foto-verfahren"></span>
-          </button>
-
-          <button class="weg" id="weg-link">
-            <span class="weg__bild" aria-hidden="true">🔗</span>
-            <span class="weg__titel">Link einer Rezeptseite</span>
-            <span class="weg__text">Adresse einfügen — die App übernimmt Zutaten,
-              Abschnitte und Zubereitung von allein.</span>
-            <span class="weg__marke" id="link-verfahren"></span>
-          </button>
-
-          <button class="weg" id="weg-text">
-            <span class="weg__bild" aria-hidden="true">📋</span>
-            <span class="weg__titel">Rezepttext einfügen</span>
-            <span class="weg__text">Auf der Seite alles markieren, kopieren, hier einfügen.
-              Klappt immer — auch wenn die Seite den Link-Weg verweigert.</span>
-          </button>
-
-          <button class="weg" id="weg-hand">
-            <span class="weg__bild" aria-hidden="true">✍️</span>
-            <span class="weg__titel">Von Hand eintragen</span>
-            <span class="weg__text">Omas Rezept aus dem Kopf? Hier ist das leere Blatt.</span>
-          </button>
-        </div>
-
-        <input type="file" id="datei-foto" accept="image/*" multiple hidden>
-
-        <!-- Linkeingabe -->
-        <div class="feld-block" id="link-block" hidden>
-          <label class="feld">
-            <span class="feld__name">Adresse des Rezepts</span>
-            <input type="url" id="link-eingabe" placeholder="https://www.chefkoch.de/rezepte/…"
-                   inputmode="url" autocomplete="off">
-          </label>
-          <button class="knopf knopf--voll" id="link-holen">Rezept holen</button>
-          <p class="notiz">Die Seite wird über einen fremden Weiterleitungsdienst geladen,
-             weil der Browser fremde Seiten sonst blockiert. Dorthin geht nur die
-             Rezept-Adresse, sonst nichts. Klappt es nicht, hilft ein Screenshot.</p>
-        </div>
-
-        <!-- Texteingabe -->
-        <div class="feld-block" id="text-block" hidden>
-          <label class="feld">
-            <span class="feld__name">Rezepttext</span>
-            <span class="feld__tipp">Ruhig alles einfügen — die App sucht sich Titel,
-              Portionen, Zutaten und Schritte selbst heraus.</span>
-            <textarea id="text-eingabe" rows="12" placeholder="Kürbissuppe&#10;Für 4 Portionen&#10;&#10;Zutaten&#10;1 kg Kürbis&#10;…"></textarea>
-          </label>
-          <button class="knopf knopf--voll" id="text-lesen">Rezept lesen</button>
-        </div>
-
-        <!-- Fortschritt -->
-        <div class="arbeit" id="arbeit" hidden>
-          <div class="arbeit__balken"><div class="arbeit__fuell" id="arbeit-fuell"></div></div>
-          <p class="arbeit__text" id="arbeit-text">Einen Moment …</p>
-        </div>
-
-        <p class="fehler" id="neu-fehler" hidden></p>
-      </div>
-    </section>
-
-    <!-- Ansicht: Einstellungen -->
-    <section class="ansicht" id="ansicht-einstellungen" aria-label="Einstellungen" hidden>
-      <div class="karte">
-        <button class="zurueck" data-zurueck>← Zurück</button>
-        <h2 class="ueberschrift">Einstellungen</h2>
-
-        <h3 class="unterschrift">Rezepte von Fotos lesen</h3>
-        <p class="notiz">Die App kann Fotos auf zwei Wegen lesen:</p>
-
-        <div class="verfahren" id="verfahren-liste"></div>
-
-        <label class="feld" style="margin-top:16px">
-          <span class="feld__name">Claude-Schlüssel</span>
-          <span class="feld__tipp">Beginnt mit <em>sk-ant-</em>. Er bleibt auf diesem Gerät und
-            landet nicht im Internet — außer bei Claude selbst, wenn ein Rezept gelesen wird.</span>
-          <input type="password" id="f-schluessel" placeholder="sk-ant-…" autocomplete="off"
-                 spellcheck="false" inputmode="text">
+  <!-- ── Neue Messung ────────────────────────────────── -->
+  <section class="card" aria-labelledby="formTitle">
+    <h2 id="formTitle" class="card-title">Neue Messung</h2>
+    <form id="entryForm" novalidate>
+      <div class="field-grid">
+        <label class="field field-wide">
+          <span class="field-label">Datum</span>
+          <input type="date" id="f-date" required>
         </label>
 
-        <div class="formular__fuss">
-          <button class="knopf" id="schluessel-sichern">Schlüssel speichern</button>
-          <button class="knopf knopf--gefahr" id="schluessel-loeschen">Schlüssel entfernen</button>
-        </div>
-        <p class="fehler" id="schluessel-fehler" hidden></p>
-        <p class="notiz" id="schluessel-stand"></p>
+        <label class="field">
+          <span class="field-label">Gewicht <em>kg</em></span>
+          <input type="text" id="f-weight" inputmode="decimal" autocomplete="off" placeholder="z. B. 82,5">
+        </label>
 
-        <details class="ausklapp">
-          <summary>Wie komme ich an einen Schlüssel? Und was kostet das?</summary>
-          <div class="ausklapp__inhalt">
-            <ol class="schritte-liste">
-              <li>Auf <a href="https://console.anthropic.com" target="_blank" rel="noopener noreferrer">console.anthropic.com</a>
-                  ein Konto anlegen.</li>
-              <li>Unter <em>Billing</em> Guthaben aufladen (ab etwa 5 $).</li>
-              <li>Unter <em>API keys</em> einen Schlüssel erzeugen und hier einfügen.</li>
-            </ol>
-            <p class="notiz">
-              Bezahlt wird über dieses Konto — <strong>nicht</strong> über das Gerät, auf dem gekocht wird.
-              Ein Rezept mit einem Foto kostet ungefähr <strong>5 US-Cent</strong>, mit drei Fotos etwa
-              10 Cent. Im Konto lässt sich ein monatliches Limit setzen, und der Schlüssel kann
-              jederzeit gesperrt werden.
-            </p>
-            <p class="notiz">
-              <strong>Ehrlich gesagt:</strong> Der Schlüssel liegt im Speicher dieses Browsers. Wer das
-              Gerät in die Hand bekommt und sich auskennt, kann ihn auslesen. Für ein Familien-Kochbuch
-              ist das vertretbar — ein Limit im Konto begrenzt den Schaden.
-            </p>
+        <label class="field">
+          <span class="field-label">Taille <em>cm</em></span>
+          <input type="text" id="f-waist" inputmode="decimal" autocomplete="off" placeholder="z. B. 92,0">
+        </label>
+
+        <label class="field">
+          <span class="field-label">Hals <em>cm</em></span>
+          <input type="text" id="f-neck" inputmode="decimal" autocomplete="off" placeholder="z. B. 40,5">
+        </label>
+
+        <label class="field field-wide">
+          <span class="field-label">Notiz</span>
+          <input type="text" id="f-note" autocomplete="off" placeholder="optional">
+        </label>
+      </div>
+
+      <!-- Erscheint erst mit einer Taille: Das Foto gehört zur 4-Wochen-Messung. -->
+      <div class="photo-field" id="photoField" hidden>
+        <span class="field-label">Foto <em>zur Taillenmessung</em></span>
+        <div class="photo-row">
+          <div class="photo-thumb" id="photoPreview" hidden>
+            <img id="photoPreviewImg" alt="Vorschau des gewählten Fotos">
+            <button type="button" class="photo-x" id="photoRemove" aria-label="Foto entfernen">×</button>
           </div>
-        </details>
+          <button type="button" class="btn btn-photo" id="photoBtn">Foto wählen</button>
+        </div>
+        <input type="file" id="f-photo" accept="image/*" hidden>
+        <p class="note">Gleiche Pose, gleiches Licht, gleiche Uhrzeit — sonst vergleichst du Schatten statt Bauch.
+        Das Foto bleibt auf diesem Gerät und wird beim Speichern verkleinert; Aufnahmeort und Kameradaten entferne ich dabei.</p>
       </div>
-    </section>
 
-    <!-- Ansicht: Rezept prüfen und bearbeiten -->
-    <section class="ansicht" id="ansicht-formular" aria-label="Rezept bearbeiten" hidden>
-      <form class="karte" id="formular" novalidate>
-        <button type="button" class="zurueck" data-zurueck>← Zurück</button>
-        <h2 class="ueberschrift" id="formular-titel">Rezept prüfen</h2>
-        <p class="beischrift" id="formular-hinweis"></p>
+      <div class="preview" id="preview" hidden></div>
+      <p class="error" id="formError" hidden></p>
 
-        <label class="feld">
-          <span class="feld__name">Name des Rezepts</span>
-          <input type="text" id="f-titel" required>
-        </label>
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary" id="submitBtn">Eintragen</button>
+        <button type="button" class="btn btn-ghost" id="cancelEdit" hidden>Abbrechen</button>
+      </div>
+      <p class="note">Morgens, nüchtern, nach dem WC. Taille auf Nabelhöhe, entspannt ausgeatmet.
+      Nur das Gewicht ist Pflicht — Taille und Hals brauchst du nur alle 2–4 Wochen.</p>
+    </form>
+  </section>
 
-        <div class="feld-reihe">
-          <label class="feld">
-            <span class="feld__name">Kategorie</span>
-            <select id="f-kategorie"></select>
-            <span class="feld__tipp" id="f-kategorie-tipp"></span>
-          </label>
+  <!-- ── Letzte Ablesung ─────────────────────────────── -->
+  <section class="card reading" aria-labelledby="h-reading">
+    <h2 id="h-reading" class="card-title">Letzte Ablesung</h2>
 
-          <label class="feld feld--schmal">
-            <span class="feld__name">Reicht für</span>
-            <div class="feld__paar">
-              <input type="number" id="f-portionen" min="1" max="99" step="1" inputmode="numeric" required>
-              <select id="f-einheit">
-                <option value="Portionen">Portionen</option>
-                <option value="Personen">Personen</option>
-                <option value="Stück">Stück</option>
-                <option value="Gläser">Gläser</option>
-                <option value="Blech">Blech</option>
-              </select>
-            </div>
-          </label>
-        </div>
+    <div class="lead">
+      <div class="lead-value">
+        <span id="leadBf" class="lead-number">—</span><span class="lead-unit">%</span>
+      </div>
+      <div class="lead-meta">
+        <span class="lead-label">Körperfett <button type="button" class="help" data-goto="wissen-kf" aria-label="Was bedeutet dieser Wert?">?</button></span>
+        <span id="leadBfDelta" class="delta"></span>
+      </div>
+    </div>
 
-        <label class="feld">
-          <span class="feld__name">Zutaten</span>
-          <span class="feld__tipp">Eine Zutat pro Zeile, z. B. <em>250 g Mehl</em>.
-            Eine Zeile mit Doppelpunkt am Ende wird zur Zwischenüberschrift,
-            z. B. <em>Für den Teig:</em></span>
-          <textarea id="f-zutaten" rows="10" spellcheck="false"></textarea>
-        </label>
+    <div class="readout" id="readout"></div>
+    <p class="note" id="readingNote"></p>
+  </section>
 
-        <label class="feld">
-          <span class="feld__name">Zubereitung</span>
-          <span class="feld__tipp">Ein Arbeitsschritt pro Absatz.</span>
-          <textarea id="f-schritte" rows="10"></textarea>
-        </label>
+  <!-- ── Alle Messungen ──────────────────────────────── -->
+  <section class="card" aria-labelledby="h-ledger">
+    <h2 id="h-ledger" class="card-title">Alle Messungen <span class="count" id="entryCount"></span></h2>
+    <div id="ledger" class="ledger"></div>
+  </section>
 
-        <label class="feld">
-          <span class="feld__name">Notizen <span class="feld__leise">(frei)</span></span>
-          <textarea id="f-notizen" rows="3" placeholder="Beim nächsten Mal weniger Zucker …"></textarea>
-        </label>
+</section>
 
-        <label class="feld">
-          <span class="feld__name">Quelle <span class="feld__leise">(frei)</span></span>
-          <input type="text" id="f-quelle" placeholder="Kochbuch, Webseite, von Oma …">
-        </label>
+<!-- ══ Seite 2: Fortschritt ══════════════════════════════ -->
+<section class="page" id="page-fortschritt" data-page="fortschritt" role="tabpanel" aria-labelledby="tab-fortschritt" hidden>
 
-        <div class="formular__fuss">
-          <button type="submit" class="knopf knopf--voll">Rezept speichern</button>
-          <button type="button" class="knopf knopf--leise" data-zurueck>Verwerfen</button>
-        </div>
-        <p class="fehler" id="formular-fehler" hidden></p>
-      </form>
-    </section>
+  <section class="card" aria-labelledby="h-goals">
+    <h2 id="h-goals" class="card-title">Weg zum Ziel</h2>
+    <div id="goals" class="goals"></div>
+  </section>
 
-  </main>
+  <section class="card" aria-labelledby="h-chart">
+    <h2 id="h-chart" class="card-title">Verlauf</h2>
+    <div class="chips" id="metricChips" role="tablist" aria-label="Messgröße wählen"></div>
+    <div class="chart-wrap">
+      <svg id="chart" role="img" aria-label="Verlaufsdiagramm"></svg>
+      <p class="chart-empty" id="chartEmpty" hidden></p>
+    </div>
+    <p class="chart-hint" id="chartHint"></p>
+  </section>
+
+</section>
+
+<!-- ══ Seite 3: Wissen ═══════════════════════════════════ -->
+<section class="page" id="page-wissen" data-page="wissen" role="tabpanel" aria-labelledby="tab-wissen" hidden>
+
+  <!-- ── Körperfettanteil ────────────────────────────── -->
+  <section class="card" id="wissen-kf" aria-labelledby="h-kf">
+    <h2 id="h-kf" class="card-title">Wie viel Körperfett ist gut?</h2>
+
+    <p class="prose">Der Körperfettanteil sagt, welcher Anteil deines Gewichts aus Fett besteht — und
+    beantwortet damit die Frage, die die Waage offenlässt. Zwei Männer mit 95 kg können völlig
+    unterschiedlich aussehen und unterschiedlich gesund sein, je nachdem, ob die Kilos aus Muskeln
+    oder aus Fett bestehen.</p>
+
+    <p class="prose">Fett ist dabei nichts Schlechtes: Ein Teil davon ist lebensnotwendig. Es geht
+    nicht um möglichst wenig, sondern um einen sinnvollen Bereich.</p>
+
+    <div class="table-wrap">
+      <table class="ref">
+        <caption>Richtwerte für Männer</caption>
+        <thead>
+          <tr><th>Bereich</th><th>Anteil</th><th>Was das bedeutet</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Essentiell</td><td class="num">2–5 %</td><td>Das absolute Minimum zum Überleben. Darunter versagen Hormonhaushalt und Organe.</td></tr>
+          <tr><td>Athleten</td><td class="num">6–13 %</td><td>Wettkampfform. Sichtbare Bauchmuskeln fangen bei etwa 10–12 % an. Auf Dauer schwer zu halten.</td></tr>
+          <tr class="zone"><td>Fit, schlank</td><td class="num">14–17 %</td><td>Sportlich und sichtbar definiert, ohne dass das ganze Leben ums Essen kreist.</td></tr>
+          <tr class="zone"><td>Durchschnitt</td><td class="num">18–24 %</td><td>Gesundheitlich meist unauffällig, aber ohne sichtbare Definition.</td></tr>
+          <tr><td>Erhöht</td><td class="num">ab 25 %</td><td>Ab hier steigt das Risiko für Herz-Kreislauf-Erkrankungen und Diabetes messbar.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p class="note">Die Zeilen 14–24 % sind hervorgehoben, weil dort die realistische Reise für die
+    meisten liegt. Für Frauen gelten andere Zahlen: Alle Bereiche liegen dort rund 8–10 Prozentpunkte
+    höher, weil der essentielle Fettanteil biologisch größer ist.</p>
+
+    <h3 class="sub-title">Warum die Taille so viel verrät</h3>
+
+    <p class="prose">Nicht jedes Fett ist gleich riskant. Entscheidend ist das <b>viszerale Fett</b> —
+    das Fett zwischen den Organen im Bauchraum. Es ist stoffwechselaktiv und schüttet Botenstoffe aus,
+    die Entzündungen und Insulinresistenz fördern. Unterhautfett an Beinen oder Gesäß tut das kaum.</p>
+
+    <p class="prose">Genau deshalb ist der Taillenumfang so nützlich: Er misst ziemlich direkt das
+    Fett, auf das es ankommt. Und er hat einen unschlagbaren Vorteil gegenüber der Waage — Muskeln
+    und eingelagertes Wasser machen den Bauch nicht breiter, Fett schon.</p>
+
+    <div class="table-wrap">
+      <table class="ref">
+        <caption>Taillenumfang bei Männern</caption>
+        <thead><tr><th>Umfang</th><th>Einordnung</th></tr></thead>
+        <tbody>
+          <tr><td class="num">unter 94 cm</td><td>unauffällig</td></tr>
+          <tr><td class="num">94–102 cm</td><td>erhöhtes Risiko</td></tr>
+          <tr><td class="num">über 102 cm</td><td>deutlich erhöhtes Risiko</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p class="prose">Noch besser als der reine Umfang ist das Verhältnis zur Körpergröße
+    (<b>Taille ÷ Größe</b>). Es sollte <b>unter 0,50</b> liegen. Die Faustregel dazu ist angenehm
+    einfach: <b>Die Taille sollte schmaler sein als die halbe Körpergröße.</b> Bei 180 cm sind das
+    also 90 cm. Diese Regel funktioniert unabhängig von Statur und Alter besser als der BMI.</p>
+
+    <h3 class="sub-title">Warum kein Zielgewicht?</h3>
+
+    <p class="prose">Weil es in die Irre führt, sobald jemand ordentlich Muskeln trägt. Der BMI kennt
+    nur Größe und Gewicht und stuft muskulöse Menschen fälschlich als übergewichtig ein. Sinnvoller
+    ist die Rechnung andersherum: Wenn du deine Magermasse hältst und nur Fett verlierst, ergibt sich
+    dein Zielgewicht von selbst aus dem angepeilten Körperfettanteil. Genau das rechnet dir diese App
+    unter <i>Einstellungen</i> vor.</p>
+
+    <p class="disclaimer">Das sind Orientierungswerte aus der Sportwissenschaft, keine medizinische
+    Beratung. Bei Vorerkrankungen oder wenn dich etwas beunruhigt, ist eine Ärztin die richtige
+    Adresse — nicht diese App.</p>
+  </section>
+
+  <!-- ── Navy-Methode ────────────────────────────────── -->
+  <section class="card" id="wissen-navy" aria-labelledby="h-navy">
+    <h2 id="h-navy" class="card-title">Die Navy-Methode</h2>
+
+    <p class="prose">Den Körperfettanteil wirklich zu <i>messen</i> ist aufwendig: Man braucht ein
+    DEXA-Gerät oder ein Unterwasserbecken. Die US-Marine stand in den 1980ern vor dem Problem, das für
+    Zehntausende Rekruten regelmäßig tun zu müssen — und suchte etwas, das mit einem Maßband
+    funktioniert.</p>
+
+    <p class="prose">Das Ergebnis entwickelten <b>Hodgdon und Beckett</b> 1984 am Naval Health
+    Research Center: eine Formel, die aus Körperumfängen auf den Fettanteil schließt. Sie ist bis
+    heute in Gebrauch und steckt in praktisch jedem Körperfett-Rechner im Netz.</p>
+
+    <h3 class="sub-title">Die Idee dahinter</h3>
+
+    <p class="prose">Die Formel nutzt einen simplen Trick: Sie vergleicht eine Stelle, an der sich
+    kaum Fett sammelt, mit einer, an der es sich bevorzugt sammelt. Der <b>Hals</b> dient als
+    schlanke Referenz — er bleibt über Jahre praktisch gleich. Die <b>Taille</b> trägt das Fett.
+    Der Abstand zwischen beiden ist also das eigentliche Signal, und die <b>Körpergröße</b> setzt
+    das Ganze ins Verhältnis. Deshalb reichen drei Zahlen.</p>
+
+    <div class="formula">
+      <span class="formula-label">Für Männer, alle Maße in cm</span>
+      <code>KF % = 495 ÷ (1,0324 − 0,19077 × log₁₀(Taille − Hals) + 0,15456 × log₁₀(Größe)) − 450</code>
+    </div>
+
+    <p class="note">Für Frauen gibt es eine eigene Variante, die zusätzlich den Hüftumfang braucht.
+    Diese App rechnet nur mit der Männer-Formel.</p>
+
+    <h3 class="sub-title">Wie genau ist das?</h3>
+
+    <p class="prose">Ehrlich gesagt: ordentlich, aber nicht präzise. Gegenüber einer DEXA-Messung
+    liegt die Abweichung bei etwa <b>±3 Prozentpunkten</b>. Zeigt dir die App also 23 %, liegt dein
+    echter Wert irgendwo zwischen 20 und 26 %. Das klingt nach viel — ist für deinen Zweck aber
+    kaum relevant.</p>
+
+    <p class="prose">Denn der Fehler ist <b>systematisch, nicht zufällig</b>. Die Formel liegt bei dir
+    immer in dieselbe Richtung daneben. Wenn dein Wert von 23 auf 21 % fällt, hast du wirklich Fett
+    verloren — selbst wenn beide Zahlen absolut betrachtet um zwei Punkte danebenliegen. <b>Genau
+    darum zählt der Trend und nicht der Einzelwert.</b></p>
+
+    <h3 class="sub-title">Wo sie schwächelt</h3>
+
+    <ul class="prose-list">
+      <li><b>Sie kennt deine Bauform nicht.</b> Zwei Männer mit identischen Maßen bekommen dasselbe
+      Ergebnis, auch wenn ihr Fett völlig anders verteilt ist.</li>
+      <li><b>Ein kräftiger Hals trickst sie aus.</b> Wer viel Nackenmuskulatur hat, bekommt einen
+      kleineren Abstand zur Taille — und damit einen zu niedrigen Wert.</li>
+      <li><b>Messfehler schlagen durch.</b> Ein Zentimeter Taille mehr macht in dieser Formel gut
+      einen halben Prozentpunkt aus. Das Maßband nicht straff ziehen, immer auf Nabelhöhe, immer
+      entspannt ausgeatmet, immer morgens.</li>
+    </ul>
+
+    <p class="prose">Die praktische Konsequenz ist angenehm entspannt: <b>Miss immer gleich, dann
+    darfst du der Richtung trauen.</b> Und miss nicht zu oft — Gewicht wöchentlich, Taille alle
+    2–4 Wochen. Häufiger erzeugt nur Rauschen und Frust.</p>
+
+    <p class="note">Zu Körperfett-Waagen mit Bioimpedanz: Die sind bequem, aber für den Absolutwert
+    noch ungenauer als das Maßband, weil sie stark vom Wasserhaushalt abhängen. Wenn überhaupt, dann
+    auch dort nur den Trend bei immer gleichen Bedingungen ansehen.</p>
+  </section>
+
+</section>
+
+<!-- ══ Seite 4: Einstellungen ════════════════════════════ -->
+<section class="page" id="page-einstellungen" data-page="einstellungen" role="tabpanel" aria-labelledby="tab-einstellungen" hidden>
+
+  <section class="card" aria-labelledby="h-settings">
+    <h2 id="h-settings" class="card-title">Einstellungen &amp; Daten</h2>
+
+    <h3 class="sub-title">Körpermaße</h3>
+    <div class="field-grid">
+      <label class="field">
+        <span class="field-label">Größe <em>cm</em></span>
+        <input type="text" id="s-height" inputmode="decimal" autocomplete="off">
+      </label>
+    </div>
+
+    <h3 class="sub-title">Zielwerte</h3>
+    <div class="field-grid">
+      <label class="field">
+        <span class="field-label">Taille Etappe <em>cm</em></span>
+        <input type="text" id="s-waistFirst" inputmode="decimal" autocomplete="off">
+      </label>
+      <label class="field">
+        <span class="field-label">Taille Ziel <em>cm</em></span>
+        <input type="text" id="s-waistLong" inputmode="decimal" autocomplete="off">
+      </label>
+      <label class="field">
+        <span class="field-label">Körperfett von <em>%</em></span>
+        <input type="text" id="s-bfLow" inputmode="decimal" autocomplete="off">
+      </label>
+      <label class="field">
+        <span class="field-label">Körperfett bis <em>%</em></span>
+        <input type="text" id="s-bfHigh" inputmode="decimal" autocomplete="off">
+      </label>
+    </div>
+    <p class="note" id="targetWeightNote"></p>
+
+    <h3 class="sub-title">Daten sichern</h3>
+    <p class="note">Deine Messungen liegen ausschließlich auf diesem Gerät. Es gibt keine Cloud —
+    exportiere regelmäßig eine CSV, sonst sind die Daten beim Handywechsel oder beim Leeren der
+    Browserdaten weg.</p>
+    <div class="form-actions">
+      <button type="button" class="btn" id="exportBtn">CSV exportieren</button>
+      <button type="button" class="btn" id="importBtn">CSV importieren</button>
+      <input type="file" id="importFile" accept=".csv,text/csv" hidden>
+    </div>
+    <p class="warn" id="photoWarn">Achtung: Die CSV enthält nur Messwerte, <b>keine Fotos</b>. Bilder
+    passen nicht in eine Textdatei. Sichere sie einzeln über den Herunterladen-Knopf in der
+    Fotoansicht.</p>
+    <p class="status" id="dataStatus" hidden></p>
+
+    <h3 class="sub-title">Speicherplatz</h3>
+    <p class="note" id="storageNote">—</p>
+
+    <h3 class="sub-title">Zurücksetzen</h3>
+    <div class="form-actions">
+      <button type="button" class="btn btn-danger" id="resetBtn">Alle Daten löschen</button>
+    </div>
+  </section>
+
+</section>
+
+</main>
+
+<footer class="foot">
+  <p>Körperfett nach der Navy-Methode aus Hals, Taille und Größe — Unschärfe rund ±3 Prozentpunkte.
+  Nur der Trend zählt, nicht der einzelne Absolutwert.</p>
+</footer>
+
+<!-- ── Fotoansicht ───────────────────────────────────── -->
+<div class="lightbox" id="lightbox" hidden role="dialog" aria-modal="true" aria-label="Foto">
+  <div class="lightbox-bar">
+    <span class="lightbox-date" id="lightboxDate"></span>
+    <div class="lightbox-acts">
+      <button type="button" class="icon-btn" id="lightboxDownload">Herunterladen</button>
+      <button type="button" class="icon-btn del" id="lightboxDelete">Löschen</button>
+      <button type="button" class="icon-btn" id="lightboxClose" aria-label="Schließen">Schließen</button>
+    </div>
+  </div>
+  <img id="lightboxImg" alt="">
 </div>
+
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
 <script src="./app.js"></script>
 </body>

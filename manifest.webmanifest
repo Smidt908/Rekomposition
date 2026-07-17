@@ -1,7 +1,7 @@
 {
-  "name": "Mones Mümmelküche",
-  "short_name": "Mümmelküche",
-  "description": "Das Kochbuch von Mone: Rezepte per Foto oder Link aufnehmen, nach Kategorien sortieren, bewerten und auf die richtige Portionszahl umrechnen.",
+  "name": "Rekomposition",
+  "short_name": "Rekomp",
+  "description": "Körperzusammensetzung verfolgen: Gewicht, Taille und Körperfett nach der Navy-Methode.",
   "lang": "de",
   "dir": "ltr",
   "start_url": "./",
@@ -9,18 +9,9 @@
   "id": "./",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#ffffff",
-  "theme_color": "#c8102e",
-  "categories": ["food", "lifestyle", "utilities"],
-  "share_target": {
-    "action": "./",
-    "method": "GET",
-    "params": {
-      "title": "title",
-      "text": "text",
-      "url": "url"
-    }
-  },
+  "background_color": "#faf7f2",
+  "theme_color": "#faf7f2",
+  "categories": ["health", "fitness", "lifestyle"],
   "icons": [
     {
       "src": "./icons/icon-192.png",
